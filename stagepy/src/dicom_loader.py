@@ -32,10 +32,10 @@ def load_ir_se_data(dicomdir):
     """
     # load dicom
     dsets = _load_dcm(dicomdir)
-    
+        
     # get slice locations
     uSliceLoc, sliceIdx = _get_slice_location(dsets)
-    
+        
     # get echo times
     uInversionTimes, inversionIdx = _get_inversion_time(dsets)
     
@@ -276,11 +276,11 @@ def _load_dcm(dicomdir):
     
     # cloose pool and wait finish   
     pool.close()
-    pool.join() 
-    
+    pool.join()
+        
     # filter None
     dsets = [dset for dset in dsets if dset is not None]
-
+    
     # cast image to complex
     dsets = _cast_to_complex(dsets)
     
@@ -355,7 +355,7 @@ def _get_slice_location(dsets):
     Return array of unique slice locations and slice location index for each dataset in dsets.
     """
     # get unique slice locations
-    sliceLoc = np.array([float(dset.SliceLocation) for dset in dsets])
+    sliceLoc = np.array([round(float(dset.SliceLocation), 4) for dset in dsets])
     uSliceLoc = np.unique(sliceLoc)
     
     # get indexes
@@ -442,6 +442,13 @@ def _get_dicom_template(dsets):
     dset = copy.deepcopy(dsets[0])
     dset.pixel_array[:] = 0.0
     dset.SliceLocation = None
+    dset.SeriesNumber = None
+    dset.InstanceNumber = None
+    dset.SeriesDescription = None
+    dset.SeriesInstanceUID = None
+    dset.FrameOfReferenceUID  = None
+    
+    return dset
 
 
 # def _sort_image(image, dcm_template):
