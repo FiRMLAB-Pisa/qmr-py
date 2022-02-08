@@ -32,61 +32,24 @@ def ir_se_t1_fitting(input, ti):
     ishape = input.shape
     input = input.reshape(ishape[0], np.prod(ishape[1:]))
     input = np.ascontiguousarray(input.transpose(), dtype=np.float64)
-    
-    # restore polarity
-    ind_min = input.argmin(axis=-1)
-    
-    tmp_1 = input.copy()
-    _reverse_polarity(tmp_1, ind_min, last_included=True)
-    
-    tmp_2 = input.copy()
-    _reverse_polarity(tmp_2, ind_min, last_included=False)
-
-    # concatenate
-    input = np.stack((tmp_1, tmp_2), axis=1)
-    
+        
     # normalize
-    # s0 = input.max(axis=(1, 2))
-    # s0[s0 == 0] = 1    
-    # input /= s0[:, None, None]
+    s0 = input.max(axis=1)
+    s0[s0 == 0] = 1    
+    input /= s0[:, None]
     
     # preallocate output
     output = np.zeros(input.shape[0], input.dtype)
-    tmp = np.zeros((input.shape[0], 2), input.dtype)
-    res = np.zeros((input.shape[0], 2), input.dtype) + np.inf
             
     # do actual fit
     pointer = InversionRecoveryT1Mapping.get_function_pointer(len(ti))
-    InversionRecoveryT1Mapping.fitting(tmp, res, input, ti, pointer)
-    
-    # select best polarity restoration
-    _select_polarity(output, tmp, res)
+    InversionRecoveryT1Mapping.fitting(output, input, ti, pointer)
     
     # reshape
     output = output.reshape(ishape[1:])
     
     return np.ascontiguousarray(output, dtype=np.float32)
 
-
-@nb.njit(cache=True, fastmath=True)
-def _reverse_polarity(input, ind_min, last_included):  
-    _, nvoxels = input.shape
-    
-    if last_included:
-        for n in range(nvoxels):
-            input[n, :ind_min[n] + 1] *= -1
-    else:
-        for n in range(nvoxels):
-            input[n, :ind_min[n]] *= -1
-            
-            
-@nb.njit(cache=True, fastmath=True)
-def _select_polarity(output, input, residual):  
-    nvoxels, _ = input.shape
-    
-    for n in range(nvoxels):
-        output[n] = input[n, np.argmin(residual[n])]
-    
     
 def me_transverse_relaxation_fitting(input, te):
     """
@@ -133,8 +96,8 @@ class InversionRecoveryT1Mapping:
     """        
     @staticmethod
     @nb.njit
-    def signal_model(ti, A, T1):
-        return A * (1 - 2 * np.exp(-ti / T1))
+    def signal_model(ti, A, B, T1):
+        return np.abs(B + A * np.exp(-ti / T1))
     
     @staticmethod
     def get_function_pointer(nti):
@@ -146,8 +109,8 @@ class InversionRecoveryT1Mapping:
         def _optimize(params_, res, args_):
             
             # get parameters
-            params = nb.carray(params_, (2,))
-            A, T1  = params
+            params = nb.carray(params_, (3,))
+            A, B, T1  = params
             
             # get variables
             args = nb.carray(args_, (2 * nti,))
@@ -156,35 +119,25 @@ class InversionRecoveryT1Mapping:
             
             # compute residual
             for i in range(nti):
-                res[i] = func(x[i], A, T1) - y[i] 
+                res[i] = func(x[i], A, B, T1) - y[i] 
                 
         return _optimize.address
     
     @staticmethod
     @nb.njit(parallel=True, fastmath=True)
-    def fitting(output, res, input, ti, optimize_ptr):
+    def fitting(output, input, ti, optimize_ptr):
         
         # general fitting options
-        nvoxels, _, neqs = input.shape
-        initial_guess = np.array([1.0, 1000.0], input.dtype) # ra, rb, T1
+        nvoxels, neqs = input.shape
+        initial_guess = np.array([-2.0, 1.0, 1000.0], input.dtype) # A, B, T1
         
         # loop over voxels
-        for n in nb.prange(nvoxels):
-            
-            # inversion polarity at min(signal)
-            args = np.append(ti, input[n, 0])
+        for n in nb.prange(nvoxels):            
+            args = np.append(ti, input[n])
             fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
             if success:
-                res[n, 0] = np.sum((fvec)**2)
-                output[n, 0] = fitparam[-1]
+                output[n] = fitparam[-1]
                 
-            # inversion polarity at min(signal) - 1
-            args = np.append(ti, input[n, 1])
-            fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
-            if success:
-                res[n, 1] = np.sum((fvec)**2)
-                output[n, 1] = fitparam[-1]
-
 
 class MultiechoTransverseRelaxationMapping:
     """
