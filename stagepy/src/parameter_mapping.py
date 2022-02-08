@@ -89,13 +89,58 @@ def me_transverse_relaxation_fitting(input, te):
     return np.ascontiguousarray(output, dtype=np.float32)
 
 
+def b1_dam_fitting(input, fa):
+    """
+    Calculate b1+ maps from dual flip angle data.
+    
+    Args:
+        input (ndarray): magnitude data of size (2, nz, ny, nx)
+        fa (ndarray): array of flip angles [deg]
+        
+    Returns:
+        output (ndarray): B1+ scaling factor map of size (nz, ny, nx).
+    """
+    # check format
+    assert len(fa) == 2, "DAM requires two flip angle only"
+    
+    # preserve input
+    input = np.abs(input.copy())
+    
+    # get min and max flip angle
+    min_flip, min_flip_ind = fa.min(), fa.argmin()
+    max_flip, max_flip_ind = fa.max(), fa.argmax()
+    
+    # check we actually have a double angle series
+    assert max_flip / min_flip == 2, "Acquired angles must be x and 2x"
+    
+    # calculate cos x
+    max_flip_img = input[max_flip_ind]
+    min_flip_img = input[min_flip_ind]
+    min_flip_img[min_flip_img == 0] = 1
+    cos_flip = 0.5 * max_flip_img / min_flip_img
+    
+    # clean up unmeaningful values
+    cos_flip[cos_flip < 0] = 0
+    cos_flip[cos_flip > 1] = 1
+    
+    # actual calculation
+    b1map = np.rad2deg(np.arccos(cos_flip)) / min_flip
+    
+    # final cleanup
+    b1map = np.nan_to_num(b1map)
+    
+    # filter?
+    
+    return b1map
+
+
 #%% Signal models
 class InversionRecoveryT1Mapping:
     """
     Inversion-Recovery T1 Mapping related routines.
     """        
     @staticmethod
-    @nb.njit
+    @nb.njit(cache=True, fastmath=True)
     def signal_model(ti, A, B, T1):
         return np.abs(B + A * np.exp(-ti / T1))
     
@@ -144,7 +189,7 @@ class MultiechoTransverseRelaxationMapping:
     Multi-echo Spin- (Gradient-) Echo T2 (T2*) Mapping related routines.
     """
     @staticmethod
-    @nb.njit
+    @nb.njit(cache=True, fastmath=True)
     def signal_model(te, A, T2):
         return A * np.exp(- te / T2)
     
