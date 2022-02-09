@@ -10,16 +10,20 @@ import numpy as np
 import numba as nb
 
 
+from scipy import ndimage
+
+
 from NumbaMinpack import minpack_sig, lmdif
 
 
-def ir_se_t1_fitting(input, ti):
+def ir_se_t1_fitting(input, ti, mask=None):
     """
     Calculate t1 maps from inversion recovery spin echo data.
     
     Args:
         input (ndarray): inversion recovery magnitude data of size (nti, nz, ny, nx)
         ti (ndarray): array of inversion times [ms].
+        mask (ndarray): binary mask to accelerate fitting (optional)
         
     Returns:
         output (ndarray): T1 map of size (nz, ny, nx) in [ms].
@@ -30,7 +34,12 @@ def ir_se_t1_fitting(input, ti):
     # process input
     ti = ti.astype(np.float64)   
     ishape = input.shape
-    input = input.reshape(ishape[0], np.prod(ishape[1:]))
+    
+    if mask is not None:
+        input = input[:, mask]
+    else:
+        input = input.reshape(ishape[0], np.prod(ishape[1:]))
+        
     input = np.ascontiguousarray(input.transpose(), dtype=np.float64)
         
     # normalize
@@ -39,25 +48,30 @@ def ir_se_t1_fitting(input, ti):
     input /= s0[:, None]
     
     # preallocate output
-    output = np.zeros(input.shape[0], input.dtype)
+    tmp = np.zeros(input.shape[0], input.dtype)
+    output = np.zeros(ishape[1:], input.dtype)
             
     # do actual fit
     pointer = InversionRecoveryT1Mapping.get_function_pointer(len(ti))
-    InversionRecoveryT1Mapping.fitting(output, input, ti, pointer)
+    InversionRecoveryT1Mapping.fitting(tmp, input, ti, pointer)
     
     # reshape
-    output = output.reshape(ishape[1:])
+    if mask is not None:
+        output[mask] = tmp
+    else:
+        output = tmp.reshape(ishape[1:])
     
     return np.ascontiguousarray(output, dtype=np.float32)
 
     
-def me_transverse_relaxation_fitting(input, te):
+def me_transverse_relaxation_fitting(input, te, mask=None):
     """
     Calculate t2/t2* maps from multiecho spin echo / gradient echo data.
     
     Args:
         input (ndarray): magnitude data of size (nte, nz, ny, nx)
         te (ndarray): array of echo times [ms].
+        mask (ndarray): binary mask to accelerate fitting (optional)
         
     Returns:
         output (ndarray): T2 / T2* map of size (nz, ny, nx) in [ms].
@@ -68,7 +82,12 @@ def me_transverse_relaxation_fitting(input, te):
     # process input
     te = te.astype(np.float64)
     ishape = input.shape
-    input = input.reshape(ishape[0], np.prod(ishape[1:]))
+    
+    if mask is not None:
+        input = input[:, mask]
+    else:
+        input = input.reshape(ishape[0], np.prod(ishape[1:]))
+        
     input = np.ascontiguousarray(input.transpose(), dtype=np.float64)
     
     # normalize
@@ -77,25 +96,30 @@ def me_transverse_relaxation_fitting(input, te):
     input /= s0[:, None]
     
     # preallocate output
-    output = np.zeros(input.shape[0], input.dtype)
+    tmp = np.zeros(input.shape[0], input.dtype)
+    output = np.zeros(ishape[1:], input.dtype)
     
     # do actual fit
     pointer = MultiechoTransverseRelaxationMapping.get_function_pointer(len(te))
-    MultiechoTransverseRelaxationMapping.fitting(output, input, te, pointer)
+    MultiechoTransverseRelaxationMapping.fitting(tmp, input, te, pointer)
         
     # reshape
-    output = output.reshape(ishape[1:])
+    if mask is not None:
+        output[mask] = tmp
+    else:
+        output = tmp.reshape(ishape[1:])
     
     return np.ascontiguousarray(output, dtype=np.float32)
 
 
-def b1_dam_fitting(input, fa):
+def b1_dam_fitting(input, fa, mask=None):
     """
     Calculate b1+ maps from dual flip angle data.
     
     Args:
         input (ndarray): magnitude data of size (2, nz, ny, nx)
         fa (ndarray): array of flip angles [deg]
+        mask (ndarray): binary mask for clean-up (optional)
         
     Returns:
         output (ndarray): B1+ scaling factor map of size (nz, ny, nx).
@@ -129,10 +153,42 @@ def b1_dam_fitting(input, fa):
     # final cleanup
     b1map = np.nan_to_num(b1map)
     
-    # filter?
-    
+    # mask
+    if mask is not None:
+        b1map = mask * b1map
+        
     return b1map
 
+#%% Utils
+def mask(input, threshold=0.05):
+    """
+    Generate binary mask from input data.
+    
+    Args:
+        input (ndarray): input image space data.
+        threshold (float): keeps data below 0.05 * input.max()
+    
+    Returns:
+        mask (ndarray): output binary mask of tissues.
+    """
+    # preserve input
+    input = np.abs(input.copy())
+    
+    # select input volume
+    if len(input.shape) == 4: # image series (contrast, nz, ny, nx)
+        input = input[0]
+        
+    # normalize
+    input = input / input.max()
+    
+    # get mask
+    mask = input > threshold
+    
+    # clean mask
+    mask = ndimage.binary_opening(mask, structure=np.ones((1, 2, 2)))
+    mask = ndimage.binary_closing(mask, structure=np.ones((1, 2, 2)))
+
+    return mask
 
 #%% Signal models
 class InversionRecoveryT1Mapping:

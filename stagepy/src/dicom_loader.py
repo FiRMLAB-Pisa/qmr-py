@@ -2,12 +2,13 @@
 """
 Created on Thu Jan 27 13:30:28 2022
 
-@author: mcencini
+@author: Matteo Cencini
 """
 import copy
 import os
 import multiprocessing
 from multiprocessing.dummy import Pool as ThreadPool
+from typing import Union, Tuple, List, Dict
 
 
 import numpy as np
@@ -16,9 +17,9 @@ import numpy as np
 import pydicom
 
 
-def load_ir_se_data(dicomdir):
+def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     """
-    Load Inversion Recovery Spin Echo images for gold standard T1 mapping.
+    Load multi-contrast images for parameter mapping.
     
     Args:
         dicomdir: string or list of strings with DICOM folders path.
@@ -29,212 +30,142 @@ def load_ir_se_data(dicomdir):
             - template: the DICOM template.
             - slice_locations: ndarray of Slice Locations [mm].
             - TI: ndarray of Inversion Times [ms].
-    """
-    # load dicom
-    dsets = _load_dcm(dicomdir)
-        
-    # get slice locations
-    uSliceLoc, sliceIdx = _get_slice_location(dsets)
-        
-    # get echo times
-    uInversionTimes, inversionIdx = _get_inversion_time(dsets)
-    
-    # extract image tensor
-    image = np.stack([dset.pixel_array for dset in dsets], axis=0)
-    
-    # get size
-    n_slices = len(uSliceLoc)
-    n_inversion_times = len(uInversionTimes)
-    ninstances, ny, nx = image.shape
-    
-    # fill sorted image tensor
-    sorted_image = np.zeros((n_inversion_times, n_slices, ny, nx), dtype=np.float32)
-    for n in range(ninstances):
-        sorted_image[inversionIdx[n], sliceIdx[n], :, :] = image[n]
-        
-    # get dicom template
-    dcm_template = _get_dicom_template(dsets)
-    dcm_template.InversionTime = None
-    
-    return sorted_image, {'template': dcm_template, 'slice_locations': uSliceLoc, 'TI': uInversionTimes}
-
-
-def load_me_se_data(dicomdir):
-    """
-    Load Spin Echo images for gold standard T2 mapping.
-    
-    Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
-        image: ndarray of sorted image data.
-        info: dict with the following fields:
-            - template: the DICOM template.
-            - slice_locations: ndarray of Slice Locations [mm].
             - TE: ndarray of Echo Times [ms].
-    """
-    # load dicom
-    dsets = _load_dcm(dicomdir)
-    
-    # get slice locations
-    uSliceLoc, sliceIdx = _get_slice_location(dsets)
-    
-    # get echo times
-    uEchoTimes, echoIdx = _get_echo_time(dsets)
-    
-    # extract image tensor
-    image = np.stack([dset.pixel_array for dset in dsets], axis=0)
-    
-    # get size
-    n_slices = len(uSliceLoc)
-    n_echo_times = len(uEchoTimes)
-    ninstances, ny, nx = image.shape
-    
-    # fill sorted image tensor
-    sorted_image = np.zeros(( n_echo_times, n_slices, ny, nx), dtype=np.float32)
-    for n in range(ninstances):
-        sorted_image[echoIdx[n], sliceIdx[n], :, :] = image[n]
-        
-    # get dicom template
-    dcm_template = _get_dicom_template(dsets)
-    dcm_template.EchoTime = None
-    
-    return sorted_image, {'template': dcm_template, 'slice_locations': uSliceLoc, 'TE': uEchoTimes}
-
-
-def load_vfa_gre_data(dicomdir):
-    """
-    Load Variable Flip Angle Gradient Echo images for T1 mapping or B1+ mapping.
-    
-    Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
-        image: ndarray of sorted image data.
-        info: dict with the following fields:
-            - template: the DICOM template.
-            - slice_locations: ndarray of Slice Locations [mm].
+            - TR: ndarray of Repetition Times [ms].
             - FA: ndarray of Flip Angles [deg].
     """
     # load dicom
     dsets = _load_dcm(dicomdir)
-    
+        
     # get slice locations
-    uSliceLoc, sliceIdx = _get_slice_location(dsets)
-    
-    # get flip angles
-    uFlipAngles, flipAngleIdx = _get_flip_angle(dsets)
+    uSliceLocs, firstSliceIdx, sliceIdx = _get_slice_locations(dsets)
         
-    # extract image tensor
-    image = np.stack([dset.pixel_array for dset in dsets], axis=0)
-    
-    # get size
-    n_slices = len(uSliceLoc)
-    n_flip = len(uFlipAngles)
-    ninstances, ny, nx = image.shape
-    
-    # fill sorted image tensor
-    sorted_image = np.zeros((n_flip, n_slices, ny, nx), dtype=np.float32)
-    for n in range(ninstances):
-        sorted_image[flipAngleIdx[n], sliceIdx[n], :, :] = image[n]
-        
-    # get dicom template
-    dcm_template = _get_dicom_template(dsets)
-    dcm_template.FlipAngle = None
-    
-    return sorted_image, {'template': dcm_template, 'slice_locations': uSliceLoc, 'FA': uFlipAngles}
-
-
-def load_me_gre_data(dicomdir):
-    """
-    Load Multi-Echo Gradient Echo images for QSM and T2* mapping or B0 and Water/Fat mapping.
-    
-    Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
-        image: ndarray of sorted image data.
-        info: dict with the following fields:
-            - template: the DICOM template.
-            - slice_locations: ndarray of Slice Locations [mm].
-            - TE: ndarray of Echo Times [ms].
-    """
-    # load dicom
-    dsets = _load_dcm(dicomdir)
-    
-    # get slice locations
-    uSliceLoc, sliceIdx = _get_slice_location(dsets)
+    # get echo times
+    inversionTimes = _get_inversion_times(dsets)
     
     # get echo times
-    uEchoTimes, echoIdx = _get_echo_time(dsets)
+    echoTimes = _get_echo_times(dsets)
     
+    # get repetition times
+    repetitionTimes = _get_repetition_times(dsets)
+    
+    # get flip angles
+    flipAngles = _get_flip_angles(dsets)
+    
+    # get sequence matrix
+    contrasts = np.stack((inversionTimes, echoTimes, repetitionTimes, flipAngles), axis=1)
+    
+    # get unique contrast and indexes
+    uContrasts, contrastIdx = _get_unique_contrasts(contrasts)
+        
     # extract image tensor
     image = np.stack([dset.pixel_array for dset in dsets], axis=0)
     
     # get size
-    n_slices = len(uSliceLoc)
-    n_echo_times = len(uEchoTimes)
+    n_slices = len(uSliceLocs)
+    n_contrasts = uContrasts.shape[0]
     ninstances, ny, nx = image.shape
     
     # fill sorted image tensor
-    sorted_image = np.zeros((n_echo_times, n_slices, ny, nx), dtype=np.complex64)
+    sorted_image = np.zeros((n_contrasts, n_slices, ny, nx), dtype=np.float32)
     for n in range(ninstances):
-        sorted_image[echoIdx[n], sliceIdx[n], :, :] = image[n]
+        sorted_image[contrastIdx[n], sliceIdx[n], :, :] = image[n]
         
     # get dicom template
-    dcm_template = _get_dicom_template(dsets)
-    dcm_template.EchoTime = None
+    dcm_template = _get_dicom_template(dsets, firstSliceIdx)
     
-    return sorted_image, {'template': dcm_template, 'slice_locations': uSliceLoc, 'TE': uEchoTimes}
+    # unpack sequence
+    TI, TE, TR, FA = uContrasts.transpose()
     
+    # squeeze
+    if sorted_image.shape[0] == 1:
+        sorted_image = sorted_image[0]
+        
+    return sorted_image, {'template': dcm_template, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
 
-def load_vfa_me_gre_data(dicomdir):
+
+def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath: str = './output'):
     """
-    Load Variable Flip Angle Multi-Echo Gradient Echo images for T1, B1+, QSM and T2* mapping (STAGE).
+    Write parametric map to dicom.
     
     Args:
         dicomdir: string or list of strings with DICOM folders path.
         
     Returns:
-        image: ndarray of sorted image data.
+        image: ndarray of image data to be written.
         info: dict with the following fields:
             - template: the DICOM template.
             - slice_locations: ndarray of Slice Locations [mm].
+            - TI: ndarray of Inversion Times [ms].
+            - TE: ndarray of Echo Times [ms].
+            - TR: ndarray of Repetition Times [ms].
             - FA: ndarray of Flip Angles [deg].
-            - TE: ndarray of Echo Times [ms].
+        outpath: desired output path
     """
-    # load dicom
-    dsets = _load_dcm(dicomdir)
-    
-    # get slice locations
-    uSliceLoc, sliceIdx = _get_slice_location(dsets)
-    
-    # get flip angles
-    uFlipAngles, flipAngleIdx = _get_flip_angle(dsets)
-    
-    # get echo times
-    uEchoTimes, echoIdx = _get_echo_time(dsets)
-    
-    # extract image tensor
-    image = np.stack([dset.pixel_array for dset in dsets], axis=0)
-    
-    # get size
-    n_slices = len(uSliceLoc)
-    n_echo_times = len(uEchoTimes)
-    n_flip = len(uFlipAngles)
-    ninstances, ny, nx = image.shape
-    
-    # fill sorted image tensor
-    sorted_image = np.zeros((n_flip, n_echo_times, n_slices, ny, nx), dtype=np.complex64)
-    for n in range(ninstances):
-        sorted_image[flipAngleIdx[n], echoIdx[n], sliceIdx[n], :, :] = image[n]
+    # generate UIDs
+    SeriesInstanceUID = pydicom.uid.generate_uid()
         
-    # get dicom template
-    dcm_template = _get_dicom_template(dsets)
-    dcm_template.FlipAngle = None
-    dcm_template.EchoTime = None
+    # count number of instances
+    ninstances = image.shape[0]
     
-    return sorted_image, {'template': dcm_template, 'slice_locations': uSliceLoc, 'FA': uFlipAngles, 'TE': uEchoTimes}
+    # init dsets
+    dsets = info['template']
+    
+    # cast image
+    minval = np.iinfo(np.int16).min
+    maxval = np.iinfo(np.int16).max
+    image[image < minval] = minval
+    image[image > maxval] = maxval
+    image = image.astype(np.int16)
+        
+    # get max value
+    windowWidth = np.percentile(np.abs(image), 99)
+        
+    # set properties
+    for n in range(ninstances):
+        dsets[n].pixel_array[:] = image[n]
+        dsets[n].PixelData = image[n].tobytes()
+                
+        dsets[n].WindowWidth = str(windowWidth)
+        dsets[n].WindowCenter = str(0.5 * windowWidth)
+
+        dsets[n].SeriesDescription = series_description
+        dsets[n].SeriesNumber = str(int(dsets[n].SeriesNumber) * 1000)
+        dsets[n].SeriesInstanceUID = SeriesInstanceUID
+    
+        dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
+        dsets[n].InstanceNumber = str(n + 1)
+        dsets[n].ImagesInAcquisition = ninstances
+        dsets[n][0x0025, 0x1007].value = ninstances
+        dsets[n][0x0025, 0x1019].value = ninstances
+        
+        
+    # generate file names
+    filename = ['img-' + str(n).zfill(3) + '.dcm' for n in range(ninstances)]
+    
+    # generate output path
+    outpath = os.path.abspath(outpath)
+        
+    # create output folder
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+        
+    # get dicompath
+    dcm_paths = [os.path.join(outpath, file) for file in filename]
+    
+    # generate path / data pair
+    path_data = [[dcm_paths[n], dsets[n]] for n in range(ninstances)]
+    
+    # make pool of workers
+    pool = ThreadPool(multiprocessing.cpu_count())
+
+    # each thread write a dicom
+    dsets = pool.map(_dcmwrite, path_data)
+    
+    # cloose pool and wait finish   
+    pool.close()
+    pool.join()
+            
 
 
 #%% Utils
@@ -295,6 +226,15 @@ def _dcmread(dcm_path):
         return pydicom.dcmread(dcm_path)
     except:
         return None
+    
+    
+def _dcmwrite(input):
+    """
+    Wrapper to pydicom dcmread to automatically handle path / file tuple
+    """
+    filename, dataset = input
+    pydicom.dcmwrite(filename, dataset)
+
 
 
 def _cast_to_complex(dsets_in):
@@ -340,7 +280,7 @@ def _cast_to_complex(dsets_in):
         
     # count number of instances
     ninstances = image.shape[0]
-
+    
     # assign to pixel array
     for n in range(ninstances):
         dsets_out[n].pixel_array[:] = image[n]
@@ -350,137 +290,118 @@ def _cast_to_complex(dsets_in):
     return dsets_out
 
 
-def _get_slice_location(dsets):
+def _get_slice_locations(dsets):
     """
     Return array of unique slice locations and slice location index for each dataset in dsets.
     """
     # get unique slice locations
-    sliceLoc = np.array([round(float(dset.SliceLocation), 4) for dset in dsets])
-    uSliceLoc = np.unique(sliceLoc)
+    sliceLocs = np.array([round(float(dset.SliceLocation), 4) for dset in dsets])
+    uSliceLocs, firstSliceIdx = np.unique(sliceLocs, return_index=True)
     
     # get indexes
-    sliceIdx = np.zeros(sliceLoc.shape, dtype=np.int)
+    sliceIdx = np.zeros(sliceLocs.shape, dtype=np.int)
     
-    for n in range(len(uSliceLoc)):
-        sliceIdx[sliceLoc == uSliceLoc[n]] = n
+    for n in range(len(uSliceLocs)):
+        sliceIdx[sliceLocs == uSliceLocs[n]] = n
         
-    return uSliceLoc, sliceIdx
+    return uSliceLocs, firstSliceIdx, sliceIdx
     
 
-def _get_flip_angle(dsets):
+def _get_flip_angles(dsets):
     """
-    Return array of unique flip angles and flip angle index for each dataset in dsets.
+    Return array of flip angles for each dataset in dsets.
     """
-    # get unique flip angles
-    flipAngle = np.array([float(dset.FlipAngle) for dset in dsets])
-    uFlipAngle = np.unique(flipAngle)
-    
-    # get indexes
-    flipIdx = np.zeros(flipAngle.shape, dtype=np.int)
-    
-    for n in range(len(uFlipAngle)):
-        flipIdx[flipAngle == uFlipAngle[n]] = n
-        
-    return uFlipAngle, flipIdx
+    # get flip angles
+    flipAngles = np.array([float(dset.FlipAngle) for dset in dsets])
+      
+    return flipAngles
 
 
-def _get_echo_time(dsets):
+def _get_echo_times(dsets):
     """
-    Return array of unique echo times and echo time index for each dataset in dsets.
+    Return array of echo times for each dataset in dsets.
     """
     # get unique echo times
-    echoTime = np.array([float(dset.EchoTime) for dset in dsets])
-    uEchoTime = np.unique(echoTime)
-    
-    # get indexes
-    echoIdx = np.zeros(echoTime.shape, dtype=np.int)
-    
-    for n in range(len(uEchoTime)):
-        echoIdx[echoTime == uEchoTime[n]] = n
-        
-    return uEchoTime, echoIdx
+    echoTimes = np.array([float(dset.EchoTime) for dset in dsets])
+          
+    return echoTimes
 
 
-def _get_repetition_time(dsets):
+def _get_repetition_times(dsets):
     """
-    Return array of unique repetition times and repetition time index for each dataset in dsets.
+    Return array of repetition times for each dataset in dsets.
     """
     # get unique repetition times
-    repetitionTime = np.array([float(dset.RepetitionTime) for dset in dsets])
-    uRepetitionTime = np.unique(repetitionTime)
-    
-    # get indexes
-    repetitionIdx = np.zeros(repetitionTime.shape, dtype=np.int)
-    
-    for n in range(len(uRepetitionTime)):
-        repetitionIdx[repetitionTime == uRepetitionTime[n]] = n
-        
-    return uRepetitionTime, repetitionIdx
+    repetitionTimes = np.array([float(dset.RepetitionTime) for dset in dsets])
+            
+    return repetitionTimes
 
 
-def _get_inversion_time(dsets):
+def _get_inversion_times(dsets):
     """
-    Return array of unique inversion times and inversion time index for each dataset in dsets.
+    Return array of inversion times for each dataset in dsets.
+    """
+    try:
+        # get unique repetition times
+        inversionTimes = np.array([float(dset.InversionTime) for dset in dsets])           
+    except:
+        inversionTimes = np.zeros(len(dsets)) + np.inf
+        
+    return inversionTimes
+
+
+def _get_unique_contrasts(constrasts):
+    """
+    Return ndarray of unique contrasts and contrast index for each dataset in dsets.
     """
     # get unique repetition times
-    inversionTime = np.array([float(dset.InversionTime) for dset in dsets])
-    uInversionTime = np.unique(inversionTime)
+    uContrasts = np.unique(constrasts, axis=0)
     
     # get indexes
-    inversionIdx = np.zeros(inversionTime.shape, dtype=np.int)
+    contrastIdx = np.zeros(constrasts.shape[0], dtype=np.int)
     
-    for n in range(len(uInversionTime)):
-        inversionIdx[inversionTime == uInversionTime[n]] = n
-        
-    return uInversionTime, inversionIdx
+    for n in range(uContrasts.shape[0]):
+        contrastIdx[(constrasts == uContrasts[n]).all(axis=-1)] = n
+                 
+    return uContrasts, contrastIdx
 
 
-def _get_dicom_template(dsets):
+def _get_dicom_template(dsets, index):
     """
     Get template of Dicom to be used for saving later.
     """
-    dset = copy.deepcopy(dsets[0])
-    dset.pixel_array[:] = 0.0
-    dset.SliceLocation = None
-    dset.SeriesNumber = None
-    dset.InstanceNumber = None
-    dset.SeriesDescription = None
-    dset.SeriesInstanceUID = None
-    dset.FrameOfReferenceUID  = None
-    
-    return dset
+    template = []
 
-
-# def _sort_image(image, dcm_template):
-#     """
-#     Sort image according to slice position and echoes
+    SeriesNumber = dsets[index[0]].SeriesNumber
     
-#     Args:
-#         image: unsorted image series of size (ninstances, ny, nx)
-#         dcm_template: list of pydicom FileDataset
+    for n in range(len(index)):
+        dset = copy.deepcopy(dsets[index[n]])
         
-#     Returns:
-#         image: sorted image of size (nechoes, nslices, ny, nx)
-#         dcm_template: list of pydicom FileDataset
-#     """    
-#     # get echo times
-#     echo_times = np.unique(np.stack([float(dcm.EchoTime) for dcm in dcm_template]))
+        dset.pixel_array[:] = 0.0
+        dset.PixelData = dset.pixel_array.tobytes()
+                
+        dset.WindowWidth = None
+        dset.WindowCenter = None
+
+        dset.SeriesDescription = None
+        dset.SeriesNumber = SeriesNumber
+        dset.SeriesInstanceUID = None
     
-#     # get sizes
-#     ninstances, ny, nx = image.shape
-#     nte = len(echo_times)
-#     nslices = ninstances // nte
+        dset.SOPInstanceUID = None
+        dset.InstanceNumber = None
+        dset.ImagesInAcquisition = None
+        dset[0x0025, 0x1007].value = None
+        dset[0x0025, 0x1019].value = None
+        
+        dset.InversionTime = '0'
+        dset.EchoTime = '0'
+        dset.EchoTrainLength = '1'
+        dset.RepetitionTime = '0'
+        dset.FlipAngle = '0'
+        
+        template.append(dset)
     
-#     # reshape image
-#     image = image.reshape(nslices, nte, ny, nx).swapaxes(0, 1)
-    
-#     # fix number of images in dicom header
-#     for dcm in dcm_template:
-#         dcm[0x0025, 0x1007].value = ninstances
-#         dcm[0x0025, 0x1019].value = ninstances
-    
-#     # return
-#     return np.ascontiguousarray(image), dcm_template
+    return template
     
     
     
