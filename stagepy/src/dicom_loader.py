@@ -295,7 +295,7 @@ def _get_slice_locations(dsets):
     Return array of unique slice locations and slice location index for each dataset in dsets.
     """
     # get unique slice locations
-    sliceLocs = np.array([round(float(dset.SliceLocation), 4) for dset in dsets])
+    sliceLocs = _get_relative_slice_locations(dsets).round(decimals=4)
     uSliceLocs, firstSliceIdx = np.unique(sliceLocs, return_index=True)
     
     # get indexes
@@ -305,6 +305,25 @@ def _get_slice_locations(dsets):
         sliceIdx[sliceLocs == uSliceLocs[n]] = n
         
     return uSliceLocs, firstSliceIdx, sliceIdx
+
+
+def _get_z_direction(dsets):
+    """
+    Return array of normal to imaging plane, as the cross product
+    between x and y plane versors.
+    """
+    x, y = np.array(dsets[0].ImageOrientationPatient).reshape(2, 3)
+    return np.cross(x, y)
+
+
+def _get_relative_slice_locations(dsets):
+    """
+    Return array of slice coordinates along the normal to imaging plane.
+    """
+    zcos = _get_z_direction(dsets)
+    z = np.stack([dset.ImagePositionPatient for dset in dsets], axis=1)
+    return zcos @ z
+    
     
 
 def _get_flip_angles(dsets):
