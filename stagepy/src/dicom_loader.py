@@ -15,6 +15,7 @@ import numpy as np
 
 
 import pydicom
+import nibabel as nib
 
 
 def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
@@ -118,8 +119,17 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
     image[image > maxval] = maxval
     image = image.astype(np.int16)
         
-    # get max value
-    windowWidth = np.percentile(np.abs(image), 99)
+    # get level
+    try:
+        windowMin = np.percentile(image[image < 0], 99)
+    except:
+        windowMin = 0      
+    try:
+        windowMax = np.percentile(image[image > 0], 99)
+    except:
+        windowMax = 0
+                    
+    windowWidth = windowMax - windowMin
         
     # set properties
     for n in range(ninstances):
@@ -165,9 +175,75 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
     # cloose pool and wait finish   
     pool.close()
     pool.join()
-            
-
-
+    
+    
+def write_nifti(image: np.ndarray, info: Dict, outpath: str = './output.nii'):
+    """
+    Write parametric map to dicom.
+    
+    Args:
+        dicomdir: string or list of strings with DICOM folders path.
+        
+    Returns:
+        image: ndarray of image data to be written.
+        info: dict with the following fields:
+            - template: the DICOM template.
+            - slice_locations: ndarray of Slice Locations [mm].
+            - TI: ndarray of Inversion Times [ms].
+            - TE: ndarray of Echo Times [ms].
+            - TR: ndarray of Repetition Times [ms].
+            - FA: ndarray of Flip Angles [deg].
+        outpath: desired output path
+    """
+    # generate file name
+    if outpath.endswith('.nii') is False and outpath.endswith('.nii.gz') is False:
+        outpath += '.nii'
+    
+    # generate output path
+    outpath = os.path.abspath(outpath)
+    
+    # create output folder
+    rootpath = os.path.split(outpath)[0]
+    if not os.path.exists(rootpath):
+        os.makedirs(rootpath)
+        
+    # get voxel size
+    dx, dy = np.array(info['template'][0].PixelSpacing).round(4)
+    dz = round(float(info['template'][0].SliceThickness), 4)
+    
+    # get affine
+    A = _get_nifti_affine(info['template'])
+    
+    # reformat image
+    image = np.flip(np.flip(image.transpose(), axis=0), axis=1)
+    
+    # cast image
+    minval = np.iinfo(np.int16).min
+    maxval = np.iinfo(np.int16).max
+    image[image < minval] = minval
+    image[image > maxval] = maxval
+    image = image.astype(np.int16)
+    
+    try:
+        windowMin = np.percentile(image[image < 0], 99)
+    except:
+        windowMin = 0
+    try:
+        windowMax = 0.5 * np.percentile(image[image > 0], 99)
+    except:
+        windowMax = 0
+        
+    # write nifti
+    nifti = nib.Nifti1Image(image, A)
+    nifti.header['pixdim'][1:4] = np.array([dx, dy, dz])
+    nifti.header['sform_code'] = 1
+    nifti.header['qform_code'] = 1
+    nifti.header['cal_min'] = windowMin 
+    nifti.header['cal_max'] = windowMax 
+    nifti.header.set_xyzt_units('mm', 'sec')
+    nib.save(nifti, outpath)
+    
+    
 #%% Utils
 def _get_dicom_paths(dicomdir):
     """
@@ -295,7 +371,7 @@ def _get_slice_locations(dsets):
     Return array of unique slice locations and slice location index for each dataset in dsets.
     """
     # get unique slice locations
-    sliceLocs = _get_relative_slice_locations(dsets).round(decimals=4)
+    sliceLocs = _get_relative_slice_position(dsets).round(decimals=4)
     uSliceLocs, firstSliceIdx = np.unique(sliceLocs, return_index=True)
     
     # get indexes
@@ -307,25 +383,40 @@ def _get_slice_locations(dsets):
     return uSliceLocs, firstSliceIdx, sliceIdx
 
 
-def _get_z_direction(dsets):
+def _get_image_orientation(dsets):
+    """
+    Return image orientation matrix.
+    """
+    F = np.array(dsets[0].ImageOrientationPatient).reshape(2, 3)
+    
+    return F
+
+
+def _get_plane_normal(dsets):
     """
     Return array of normal to imaging plane, as the cross product
     between x and y plane versors.
     """
-    x, y = np.array(dsets[0].ImageOrientationPatient).reshape(2, 3)
+    x, y = _get_image_orientation(dsets)
     return np.cross(x, y)
 
 
-def _get_relative_slice_locations(dsets):
+def _get_position(dsets):
+    """
+    Return matrix of image position of size (3, nslices).
+    """
+    return np.stack([dset.ImagePositionPatient for dset in dsets], axis=1)
+    
+
+def _get_relative_slice_position(dsets):
     """
     Return array of slice coordinates along the normal to imaging plane.
     """
-    zcos = _get_z_direction(dsets)
-    z = np.stack([dset.ImagePositionPatient for dset in dsets], axis=1)
-    return zcos @ z
+    z = _get_plane_normal(dsets)
+    position =  _get_position(dsets)
+    return z @ position
     
     
-
 def _get_flip_angles(dsets):
     """
     Return array of flip angles for each dataset in dsets.
@@ -421,6 +512,44 @@ def _get_dicom_template(dsets, index):
         template.append(dset)
     
     return template
+
+
+def _get_nifti_affine(dsets):
+    """
+    Return affine transform between voxel coordinates and mm coordinates as
+    described in https://nipy.org/nibabel/dicom/spm_dicom.html#spm-volume-sorting
+    """
+    # common parameters
+    T = _get_position(dsets)
+    T1 = T[:, 0].round(4)
+    
+    F = _get_image_orientation(dsets)
+    dr, dc = np.array(dsets[0].PixelSpacing).round(4)
+    
+    if len(dsets) == 1: # single slice case
+        n = _get_plane_normal(dsets)
+        ds = float(dsets[0].SliceThickness)
+    
+        A = np.stack((np.append(F[0] * dr, 0),
+                      np.append(F[1] * dc, 0),
+                      np.append(ds * n, 0),
+                      np.append(T1, 1)), axis=1)
+
+    else: # multi slice case
+        N = len(dsets)
+        TN = T[:,-1].round(4)
+        A = np.stack((np.append(F[0] * dr, 0),
+                      np.append(F[1] * dc, 0),
+                      np.append((TN - T1) / (N - 1), 0),
+                      np.append(T1, 1)), axis=1)
+        
+    # fix origin of y axis (wonder if it is true for arbitrary orientations...)
+    A[:, -1] = A @ np.array([0, dsets[0].Columns - 1, 0, 1])
+        
+    return A
+        
+        
+        
     
     
     

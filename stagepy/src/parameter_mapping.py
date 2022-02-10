@@ -60,6 +60,9 @@ def ir_se_t1_fitting(input, ti, mask=None):
         output[mask] = tmp
     else:
         output = tmp.reshape(ishape[1:])
+        
+    # remove unphysical values
+    output[output < 0] = 0
     
     return np.ascontiguousarray(output, dtype=np.float32)
 
@@ -108,7 +111,10 @@ def me_transverse_relaxation_fitting(input, te, mask=None):
         output[mask] = tmp
     else:
         output = tmp.reshape(ishape[1:])
-    
+        
+    # remove unphysical values
+    output[output < 0] = 0
+            
     return np.ascontiguousarray(output, dtype=np.float32)
 
 
