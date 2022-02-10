@@ -1,0 +1,10 @@
+name: qmrpy
+channels:
+  - conda-forge
+dependencies:
+# non-python dependencies
+  - openssl=1.0.2
+  - gfortran_linux-64
+# python core 
+  - python=3.7.0
+  - pip=21.2.2

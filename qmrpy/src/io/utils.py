@@ -1,250 +1,23 @@
 # -*- coding: utf-8 -*-
 """
+Utility routines for DICOM files loading and sorting.
+
 Created on Thu Jan 27 13:30:28 2022
 
 @author: Matteo Cencini
 """
 import copy
-import os
 import multiprocessing
 from multiprocessing.dummy import Pool as ThreadPool
-from typing import Union, Tuple, List, Dict
+import os
 
 
 import numpy as np
 
 
 import pydicom
-import nibabel as nib
 
-
-def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
-    """
-    Load multi-contrast images for parameter mapping.
     
-    Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
-        image: ndarray of sorted image data.
-        info: dict with the following fields:
-            - template: the DICOM template.
-            - slice_locations: ndarray of Slice Locations [mm].
-            - TI: ndarray of Inversion Times [ms].
-            - TE: ndarray of Echo Times [ms].
-            - TR: ndarray of Repetition Times [ms].
-            - FA: ndarray of Flip Angles [deg].
-    """
-    # load dicom
-    dsets = _load_dcm(dicomdir)
-        
-    # get slice locations
-    uSliceLocs, firstSliceIdx, sliceIdx = _get_slice_locations(dsets)
-        
-    # get echo times
-    inversionTimes = _get_inversion_times(dsets)
-    
-    # get echo times
-    echoTimes = _get_echo_times(dsets)
-    
-    # get repetition times
-    repetitionTimes = _get_repetition_times(dsets)
-    
-    # get flip angles
-    flipAngles = _get_flip_angles(dsets)
-    
-    # get sequence matrix
-    contrasts = np.stack((inversionTimes, echoTimes, repetitionTimes, flipAngles), axis=1)
-    
-    # get unique contrast and indexes
-    uContrasts, contrastIdx = _get_unique_contrasts(contrasts)
-        
-    # extract image tensor
-    image = np.stack([dset.pixel_array for dset in dsets], axis=0)
-    
-    # get size
-    n_slices = len(uSliceLocs)
-    n_contrasts = uContrasts.shape[0]
-    ninstances, ny, nx = image.shape
-    
-    # fill sorted image tensor
-    sorted_image = np.zeros((n_contrasts, n_slices, ny, nx), dtype=np.float32)
-    for n in range(ninstances):
-        sorted_image[contrastIdx[n], sliceIdx[n], :, :] = image[n]
-        
-    # get dicom template
-    dcm_template = _get_dicom_template(dsets, firstSliceIdx)
-    
-    # unpack sequence
-    TI, TE, TR, FA = uContrasts.transpose()
-    
-    # squeeze
-    if sorted_image.shape[0] == 1:
-        sorted_image = sorted_image[0]
-        
-    return sorted_image, {'template': dcm_template, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
-
-
-def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath: str = './output'):
-    """
-    Write parametric map to dicom.
-    
-    Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
-        image: ndarray of image data to be written.
-        info: dict with the following fields:
-            - template: the DICOM template.
-            - slice_locations: ndarray of Slice Locations [mm].
-            - TI: ndarray of Inversion Times [ms].
-            - TE: ndarray of Echo Times [ms].
-            - TR: ndarray of Repetition Times [ms].
-            - FA: ndarray of Flip Angles [deg].
-        outpath: desired output path
-    """
-    # generate UIDs
-    SeriesInstanceUID = pydicom.uid.generate_uid()
-        
-    # count number of instances
-    ninstances = image.shape[0]
-    
-    # init dsets
-    dsets = info['template']
-    
-    # cast image
-    minval = np.iinfo(np.int16).min
-    maxval = np.iinfo(np.int16).max
-    image[image < minval] = minval
-    image[image > maxval] = maxval
-    image = image.astype(np.int16)
-        
-    # get level
-    try:
-        windowMin = np.percentile(image[image < 0], 99)
-    except:
-        windowMin = 0      
-    try:
-        windowMax = np.percentile(image[image > 0], 99)
-    except:
-        windowMax = 0
-                    
-    windowWidth = windowMax - windowMin
-        
-    # set properties
-    for n in range(ninstances):
-        dsets[n].pixel_array[:] = image[n]
-        dsets[n].PixelData = image[n].tobytes()
-                
-        dsets[n].WindowWidth = str(windowWidth)
-        dsets[n].WindowCenter = str(0.5 * windowWidth)
-
-        dsets[n].SeriesDescription = series_description
-        dsets[n].SeriesNumber = str(int(dsets[n].SeriesNumber) * 1000)
-        dsets[n].SeriesInstanceUID = SeriesInstanceUID
-    
-        dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
-        dsets[n].InstanceNumber = str(n + 1)
-        dsets[n].ImagesInAcquisition = ninstances
-        dsets[n][0x0025, 0x1007].value = ninstances
-        dsets[n][0x0025, 0x1019].value = ninstances
-        
-        
-    # generate file names
-    filename = ['img-' + str(n).zfill(3) + '.dcm' for n in range(ninstances)]
-    
-    # generate output path
-    outpath = os.path.abspath(outpath)
-        
-    # create output folder
-    if not os.path.exists(outpath):
-        os.makedirs(outpath)
-        
-    # get dicompath
-    dcm_paths = [os.path.join(outpath, file) for file in filename]
-    
-    # generate path / data pair
-    path_data = [[dcm_paths[n], dsets[n]] for n in range(ninstances)]
-    
-    # make pool of workers
-    pool = ThreadPool(multiprocessing.cpu_count())
-
-    # each thread write a dicom
-    dsets = pool.map(_dcmwrite, path_data)
-    
-    # cloose pool and wait finish   
-    pool.close()
-    pool.join()
-    
-    
-def write_nifti(image: np.ndarray, info: Dict, outpath: str = './output.nii'):
-    """
-    Write parametric map to dicom.
-    
-    Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
-        image: ndarray of image data to be written.
-        info: dict with the following fields:
-            - template: the DICOM template.
-            - slice_locations: ndarray of Slice Locations [mm].
-            - TI: ndarray of Inversion Times [ms].
-            - TE: ndarray of Echo Times [ms].
-            - TR: ndarray of Repetition Times [ms].
-            - FA: ndarray of Flip Angles [deg].
-        outpath: desired output path
-    """
-    # generate file name
-    if outpath.endswith('.nii') is False and outpath.endswith('.nii.gz') is False:
-        outpath += '.nii'
-    
-    # generate output path
-    outpath = os.path.abspath(outpath)
-    
-    # create output folder
-    rootpath = os.path.split(outpath)[0]
-    if not os.path.exists(rootpath):
-        os.makedirs(rootpath)
-        
-    # get voxel size
-    dx, dy = np.array(info['template'][0].PixelSpacing).round(4)
-    dz = round(float(info['template'][0].SliceThickness), 4)
-    
-    # get affine
-    A = _get_nifti_affine(info['template'])
-    
-    # reformat image
-    image = np.flip(np.flip(image.transpose(), axis=0), axis=1)
-    
-    # cast image
-    minval = np.iinfo(np.int16).min
-    maxval = np.iinfo(np.int16).max
-    image[image < minval] = minval
-    image[image > maxval] = maxval
-    image = image.astype(np.int16)
-    
-    try:
-        windowMin = np.percentile(image[image < 0], 99)
-    except:
-        windowMin = 0
-    try:
-        windowMax = 0.5 * np.percentile(image[image > 0], 99)
-    except:
-        windowMax = 0
-        
-    # write nifti
-    nifti = nib.Nifti1Image(image, A)
-    nifti.header['pixdim'][1:4] = np.array([dx, dy, dz])
-    nifti.header['sform_code'] = 1
-    nifti.header['qform_code'] = 1
-    nifti.header['cal_min'] = windowMin 
-    nifti.header['cal_max'] = windowMax 
-    nifti.header.set_xyzt_units('mm', 'sec')
-    nib.save(nifti, outpath)
-    
-    
-#%% Utils
 def _get_dicom_paths(dicomdir):
     """
     Get path to all DICOMs in a directory or a list of directories.
@@ -548,12 +321,3 @@ def _get_nifti_affine(dsets):
         
     return A
         
-        
-        
-    
-    
-    
-
-    
-    
-    
