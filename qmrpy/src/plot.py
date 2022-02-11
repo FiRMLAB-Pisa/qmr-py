@@ -9,6 +9,8 @@ Created on Thu Feb 10 19:06:26 2022
 import matplotlib.pyplot as plt
 import numpy as np
 
+__all__ = ['show_images']
+
 
 def show_images(qmap, slice_idx, title=None, cmap='gray'):
     """

@@ -18,6 +18,9 @@ from tqdm import tqdm
 from qmrpy import io, inference
 
 
+__all__ = ['longitudinal_relaxation', 'transverse_relaxation', 'transmit_field']
+
+
 @click.group()
 def cli():
     pass
@@ -44,9 +47,7 @@ def longitudinal_relaxation(input_path, output_path, output_label, save_dicom, s
     if input_path.endswith('/') or input_path.endswith('\\'):
         folders = os.listdir(input_path)
         input_path = [os.path.join(input_path, folder) for folder in folders]
-        
-    assert save_dicom or save_nifti, "At least one between --save-dicom and --save-nifti must be true!"
-    
+            
     click.echo("starting processing...")
     t_start = time()
     
@@ -66,19 +67,21 @@ def longitudinal_relaxation(input_path, output_path, output_label, save_dicom, s
             mask = None
             
         pbar.set_description("computing longitudinal relaxation map...")
-        transverse_relaxation_map = inference.ir_se_t1_fitting(img, ti, mask)
+        longitudinal_relaxation_map = inference.ir_se_t1_fitting(img, ti, mask)
         pbar.update(step)
         
         pbar.set_description("saving output to disk...")
         if save_dicom:
-            io.write_dicom(transverse_relaxation_map, info, output_label, output_path)
+            io.write_dicom(longitudinal_relaxation_map, info, output_label, output_path)
             
         if save_nifti:
-            io.write_nifti(transverse_relaxation_map, info, output_label, output_path)
+            io.write_nifti(longitudinal_relaxation_map, info, output_label, output_path)
         pbar.update(step)
         
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
+    
+    return longitudinal_relaxation_map
 
     
 # wrap into command line
@@ -106,9 +109,7 @@ def transverse_relaxation(input_path, output_path, output_label, save_dicom, sav
     if input_path.endswith('/') or input_path.endswith('\\'):
         folders = os.listdir(input_path)
         input_path = [os.path.join(input_path, folder) for folder in folders]
-        
-    assert save_dicom or save_nifti, "At least one between --save-dicom and --save-nifti must be true!"
-    
+            
     click.echo("starting processing...")
     t_start = time()
     
@@ -142,6 +143,8 @@ def transverse_relaxation(input_path, output_path, output_label, save_dicom, sav
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
+    return transverse_relaxation_map
+    
 
 # wrap into command line
 cli.add_command(transverse_relaxation)
@@ -168,9 +171,7 @@ def transmit_field(input_path, output_path, output_label, save_dicom, save_nifti
     if input_path.endswith('/') or input_path.endswith('\\'):
         folders = os.listdir(input_path)
         input_path = [os.path.join(input_path, folder) for folder in folders]
-        
-    assert save_dicom or save_nifti, "At least one between --save-dicom and --save-nifti must be true!"
-    
+            
     click.echo("starting processing...")
     t_start = time()
     
@@ -190,19 +191,21 @@ def transmit_field(input_path, output_path, output_label, save_dicom, save_nifti
             mask = None
             
         pbar.set_description("computing transmit field magnitude map...")
-        transverse_relaxation_map = inference.b1_dam_fitting(img, fa, mask)
+        transmit_field_map = inference.b1_dam_fitting(img, fa, mask)
         pbar.update(step)
         
         pbar.set_description("saving output to disk...")
         if save_dicom:
-            io.write_dicom(transverse_relaxation_map, info, output_label, output_path)
+            io.write_dicom(transmit_field_map, info, output_label, output_path)
             
         if save_nifti:
-            io.write_nifti(transverse_relaxation_map, info, output_label, output_path)
+            io.write_nifti(transmit_field_map, info, output_label, output_path)
         pbar.update(step)
         
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
+    
+    return transmit_field_map
     
 
 # wrap into command line

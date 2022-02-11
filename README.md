@@ -33,4 +33,9 @@ After pre-requisites are satisfied:
 
 ## Usage
 
-We provide a Command Line Interface.
+We provide a Command Line Interface. For documentation type:
+
+```bash
+qmri --help
+```
+
