@@ -22,7 +22,7 @@ After pre-requisites are satisfied:
 1.  Clone the repository: 
 
    ```bash
-   git clone git@github.com:FiRMLAB-Pisa/stage-py.git
+   git clone git@github.com:FiRMLAB-Pisa/qmr-py.git
    ```
 
 2. From repository top folder:
