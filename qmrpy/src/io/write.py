@@ -86,10 +86,13 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
     
         dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
         dsets[n].InstanceNumber = str(n + 1)
-        dsets[n].ImagesInAcquisition = ninstances
-        dsets[n][0x0025, 0x1007].value = ninstances
-        dsets[n][0x0025, 0x1019].value = ninstances
         
+        try:
+            dsets[n].ImagesInAcquisition = ninstances
+            dsets[n][0x0025, 0x1007].value = ninstances
+            dsets[n][0x0025, 0x1019].value = ninstances
+        except:
+            pass
         
     # generate file names
     filename = ['img-' + str(n).zfill(3) + '.dcm' for n in range(ninstances)]

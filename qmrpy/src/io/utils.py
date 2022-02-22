@@ -17,12 +17,40 @@ import numpy as np
 
 import pydicom
 
+
+def _load_dcm(dicomdir):
+    """    
+    load list of dcm files and automatically gather real/imag or magnitude/phase to complex image.
+    """
+    # get list of dcm files
+    dcm_paths = _get_dicom_paths(dicomdir)
+    
+    # check inside paths for subfolders
+    dcm_paths = _probe_dicom_paths(dcm_paths)
+        
+    # make pool of workers
+    pool = ThreadPool(multiprocessing.cpu_count())
+
+    # each thread load a dicom
+    dsets = pool.map(_dcmread, dcm_paths)
+    
+    # cloose pool and wait finish   
+    pool.close()
+    pool.join()
+        
+    # filter None
+    dsets = [dset for dset in dsets if dset is not None]
+    
+    # cast image to complex
+    dsets = _cast_to_complex(dsets)
+    
+    return dsets
+
     
 def _get_dicom_paths(dicomdir):
     """
     Get path to all DICOMs in a directory or a list of directories.
     """
-    
     # get all files in dicom dir
     if isinstance(dicomdir, (tuple, list)):
         dcm_paths = _get_full_path(dicomdir[0], os.listdir(dicomdir[0]))
@@ -41,30 +69,20 @@ def _get_full_path(root, file_list):
     return [os.path.abspath(os.path.join(root, file)) for file in file_list]
 
 
-def _load_dcm(dicomdir):
-    """    
-    load list of dcm files and automatically gather real/imag or magnitude/phase to complex image.
+def _probe_dicom_paths(dcm_paths_in):
     """
-    # get list of dcm files
-    dcm_paths = _get_dicom_paths(dicomdir)
+    For each element in list, check if it is a folder and read dicom paths inside it.
+    """
+    dcm_paths_out = []
     
-    # make pool of workers
-    pool = ThreadPool(multiprocessing.cpu_count())
-
-    # each thread load a dicom
-    dsets = pool.map(_dcmread, dcm_paths)
-    
-    # cloose pool and wait finish   
-    pool.close()
-    pool.join()
+    # loop over paths in input list
+    for path in dcm_paths_in:
+        if os.path.isdir(path):
+            dcm_paths_out += _get_dicom_paths(path)
+        else:
+            dcm_paths_out.append(path) 
         
-    # filter None
-    dsets = [dset for dset in dsets if dset is not None]
-    
-    # cast image to complex
-    dsets = _cast_to_complex(dsets)
-    
-    return dsets
+    return dcm_paths_out
 
 
 def _dcmread(dcm_path):
@@ -85,10 +103,46 @@ def _dcmwrite(input):
     pydicom.dcmwrite(filename, dataset)
 
 
-
 def _cast_to_complex(dsets_in):
     """
-    Attempt to retrive complex image with the following priority:
+    Attempt to retrive complex image, with the following priority:
+        
+        1) Real + 1j Imag
+        2) Magnitude * exp(1j * Phase)
+
+    If neither Real / Imag nor Phase are found, returns Magnitude only.
+    """
+    # get vendor
+    vendor = _get_vendor(dsets_in)
+    
+    # actual conversion
+    if vendor == 'GE':
+        return _cast_to_complex_ge(dsets_in)
+    
+    if vendor == 'Philips':
+        return _cast_to_complex_philips(dsets_in)
+    
+    if vendor == 'Siemens':
+        return _cast_to_complex_siemens(dsets_in)
+    
+    
+def _get_vendor(dset):
+    """
+    Get vendor from DICOM header.
+    """
+    if dset.Manufacturer == 'GE MEDICAL SYSTEMS':
+        return 'GE'
+    
+    if dset.Manufacturer == 'Philips Medical Systems':
+        return 'Philips'
+    
+    if dset.Manufacturer == 'SIEMENS':
+        return 'Siemens'
+    
+
+def _cast_to_complex_ge(dsets_in):
+    """
+    Attempt to retrive complex image for GE DICOM, with the following priority:
         
         1) Real + 1j Imag
         2) Magnitude * exp(1j * Phase)
@@ -135,6 +189,78 @@ def _cast_to_complex(dsets_in):
         dsets_out[n].pixel_array[:] = image[n]
         dsets_out[n][0x0025, 0x1007].value = ninstances
         dsets_out[n][0x0025, 0x1019].value = ninstances
+        
+    return dsets_out
+
+
+def _cast_to_complex_philips(dsets_in):
+    """
+    Attempt to retrive complex image for Philips DICOM:
+    If Phase is not found, returns Magnitude only.
+    """
+    # initialize
+    magnitude = []
+    phase = []
+    
+    # allocate template out
+    dsets_out = []
+    
+    # loop over dataset
+    for dset in dsets_in:
+        if dset.ImageType[-2] == 'M':
+            magnitude.append(dset.pixel_array)
+            dsets_out.append(dset)
+        
+        if dset.ImageType[-2] == 'P':
+            phase.append(dset.pixel_array)
+                           
+    if magnitude and phase:
+        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * np.stack(phase, axis=0).astype(np.float32))
+    else:
+        image = np.stack(magnitude, axis=0).astype(np.float32)
+        
+    # count number of instances
+    ninstances = image.shape[0]
+    
+    # assign to pixel array
+    for n in range(ninstances):
+        dsets_out[n].pixel_array[:] = image[n]
+        
+    return dsets_out
+
+
+def _cast_to_complex_siemens(dsets_in):
+    """
+    Attempt to retrive complex image for Siemens DICOM:
+    If Phase is not found, returns Magnitude only.
+    """
+    # initialize
+    magnitude = []
+    phase = []
+    
+    # allocate template out
+    dsets_out = []
+    
+    # loop over dataset
+    for dset in dsets_in:
+        if dset.ImageType[-3] == 'M':
+            magnitude.append(dset.pixel_array)
+            dsets_out.append(dset)
+        
+        if dset.ImageType[-3] == 'P':
+            phase.append(dset.pixel_array)
+                           
+    if magnitude and phase:
+        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * np.stack(phase, axis=0).astype(np.float32))
+    else:
+        image = np.stack(magnitude, axis=0).astype(np.float32)
+        
+    # count number of instances
+    ninstances = image.shape[0]
+    
+    # assign to pixel array
+    for n in range(ninstances):
+        dsets_out[n].pixel_array[:] = image[n]
         
     return dsets_out
 
@@ -272,9 +398,13 @@ def _get_dicom_template(dsets, index):
     
         dset.SOPInstanceUID = None
         dset.InstanceNumber = None
-        dset.ImagesInAcquisition = None
-        dset[0x0025, 0x1007].value = None
-        dset[0x0025, 0x1019].value = None
+        
+        try:
+            dset.ImagesInAcquisition = None
+            dset[0x0025, 0x1007].value = None
+            dset[0x0025, 0x1019].value = None
+        except:
+            pass
         
         dset.InversionTime = '0'
         dset.EchoTime = '0'
