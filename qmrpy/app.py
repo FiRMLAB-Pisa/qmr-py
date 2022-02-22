@@ -72,8 +72,7 @@ def longitudinal_relaxation(input_path, output_path, output_label, save_dicom, s
         
         pbar.set_description("saving output to disk...")
         if save_dicom:
-            io.write_dicom(longitudinal_relaxation_map, info, output_label, output_path)
-            
+            io.write_dicom(longitudinal_relaxation_map, info, output_label, output_path)        
         if save_nifti:
             io.write_nifti(longitudinal_relaxation_map, info, output_label, output_path)
         pbar.update(step)
@@ -134,8 +133,7 @@ def transverse_relaxation(input_path, output_path, output_label, save_dicom, sav
         
         pbar.set_description("saving output to disk...")
         if save_dicom:
-            io.write_dicom(transverse_relaxation_map, info, output_label, output_path)
-            
+            io.write_dicom(transverse_relaxation_map, info, output_label, output_path)         
         if save_nifti:
             io.write_nifti(transverse_relaxation_map, info, output_label, output_path)
         pbar.update(step)
@@ -196,8 +194,7 @@ def transmit_field(input_path, output_path, output_label, save_dicom, save_nifti
         
         pbar.set_description("saving output to disk...")
         if save_dicom:
-            io.write_dicom(transmit_field_map, info, output_label, output_path)
-            
+            io.write_dicom(transmit_field_map, info, output_label, output_path)          
         if save_nifti:
             io.write_nifti(transmit_field_map, info, output_label, output_path)
         pbar.update(step)
