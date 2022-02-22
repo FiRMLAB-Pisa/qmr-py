@@ -113,7 +113,7 @@ def _cast_to_complex(dsets_in):
     If neither Real / Imag nor Phase are found, returns Magnitude only.
     """
     # get vendor
-    vendor = _get_vendor(dsets_in)
+    vendor = _get_vendor(dsets_in[0])
     
     # actual conversion
     if vendor == 'GE':
