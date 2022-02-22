@@ -36,7 +36,7 @@ def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             - FA: ndarray of Flip Angles [deg].
     """
     # load dicom
-    dsets = utils._load_dcm(dicomdir)
+    image, dsets = utils._load_dcm(dicomdir)
         
     # get slice locations
     uSliceLocs, firstSliceIdx, sliceIdx = utils._get_slice_locations(dsets)
@@ -58,17 +58,14 @@ def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     
     # get unique contrast and indexes
     uContrasts, contrastIdx = utils._get_unique_contrasts(contrasts)
-        
-    # extract image tensor
-    image = np.stack([dset.pixel_array for dset in dsets], axis=0)
-    
+            
     # get size
     n_slices = len(uSliceLocs)
     n_contrasts = uContrasts.shape[0]
     ninstances, ny, nx = image.shape
     
     # fill sorted image tensor
-    sorted_image = np.zeros((n_contrasts, n_slices, ny, nx), dtype=np.float32)
+    sorted_image = np.zeros((n_contrasts, n_slices, ny, nx), dtype=image.dtype)
     for n in range(ninstances):
         sorted_image[contrastIdx[n], sliceIdx[n], :, :] = image[n]
         

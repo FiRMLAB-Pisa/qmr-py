@@ -42,9 +42,9 @@ def _load_dcm(dicomdir):
     dsets = [dset for dset in dsets if dset is not None]
     
     # cast image to complex
-    dsets = _cast_to_complex(dsets)
+    image, dsets = _cast_to_complex(dsets)
     
-    return dsets
+    return image, dsets
 
     
 def _get_dicom_paths(dicomdir):
@@ -154,6 +154,7 @@ def _cast_to_complex_ge(dsets_in):
     imag = []
     magnitude = []
     phase = []
+    do_recon = True
     
     # allocate template out
     dsets_out = []
@@ -173,24 +174,28 @@ def _cast_to_complex_ge(dsets_in):
         if dset[0x0043, 0x102f].value == 3:
             imag.append(dset.pixel_array)
             
-    if real and imag:
+    if real and imag and do_recon:
         image = np.stack(real, axis=0).astype(np.float32) + 1j * np.stack(imag, axis=0).astype(np.float32)
+        do_recon = False
     
-    if magnitude and phase:
-        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * np.stack(phase, axis=0).astype(np.float32))
-    else:
+    if magnitude and phase and do_recon:
+        scale = 2 * np.pi / 4095
+        offset = -np.pi
+        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * (scale * np.stack(phase, axis=0) + offset).astype(np.float32))
+        do_recon = False
+    elif do_recon:
         image = np.stack(magnitude, axis=0).astype(np.float32)
         
     # count number of instances
     ninstances = image.shape[0]
-    
+        
     # assign to pixel array
     for n in range(ninstances):
-        dsets_out[n].pixel_array[:] = image[n]
+        dsets_out[n].pixel_array[:] = 0.0
         dsets_out[n][0x0025, 0x1007].value = ninstances
         dsets_out[n][0x0025, 0x1019].value = ninstances
         
-    return dsets_out
+    return image, dsets_out
 
 
 def _cast_to_complex_philips(dsets_in):
@@ -215,18 +220,20 @@ def _cast_to_complex_philips(dsets_in):
             phase.append(dset.pixel_array)
                            
     if magnitude and phase:
-        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * np.stack(phase, axis=0).astype(np.float32))
+        scale = 2 * np.pi / 4095
+        offset = -np.pi
+        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * (scale * np.stack(phase, axis=0) + offset).astype(np.float32))
     else:
         image = np.stack(magnitude, axis=0).astype(np.float32)
         
     # count number of instances
     ninstances = image.shape[0]
-    
+        
     # assign to pixel array
     for n in range(ninstances):
-        dsets_out[n].pixel_array[:] = image[n]
+        dsets_out[n].pixel_array[:] = 0.0
         
-    return dsets_out
+    return image, dsets_out
 
 
 def _cast_to_complex_siemens(dsets_in):
@@ -243,26 +250,28 @@ def _cast_to_complex_siemens(dsets_in):
     
     # loop over dataset
     for dset in dsets_in:
-        if dset.ImageType[-3] == 'M':
+        if dset.ImageType[2] == 'M':
             magnitude.append(dset.pixel_array)
             dsets_out.append(dset)
         
-        if dset.ImageType[-3] == 'P':
+        if dset.ImageType[2] == 'P':
             phase.append(dset.pixel_array)
                            
     if magnitude and phase:
-        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * np.stack(phase, axis=0).astype(np.float32))
+        scale = 2 * np.pi / 4095
+        offset = -np.pi
+        image = np.stack(magnitude, axis=0).astype(np.float32) * np.exp( 1j * (scale * np.stack(phase, axis=0) + offset).astype(np.float32))
     else:
         image = np.stack(magnitude, axis=0).astype(np.float32)
         
     # count number of instances
     ninstances = image.shape[0]
-    
+        
     # assign to pixel array
     for n in range(ninstances):
-        dsets_out[n].pixel_array[:] = image[n]
+        dsets_out[n].pixel_array[:] = 0.0
         
-    return dsets_out
+    return image, dsets_out
 
 
 def _get_slice_locations(dsets):
