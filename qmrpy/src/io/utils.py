@@ -186,6 +186,10 @@ def _cast_to_complex_ge(dsets_in):
     elif do_recon:
         image = np.stack(magnitude, axis=0).astype(np.float32)
         
+    # fix phase shift along z
+    if np.iscomplexobj(image):
+        image[..., 1::2, :, :] = ((1e5 * (image[..., 1::2, :, :] + 2 * np.pi)) % (2 * np.pi * 1e5)) / 1e5 - np.pi
+        
     # count number of instances
     ninstances = image.shape[0]
         
