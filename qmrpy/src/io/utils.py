@@ -190,7 +190,7 @@ def _cast_to_complex_ge(dsets_in):
     if np.iscomplexobj(image):
         phase = np.angle(image)
         phase[..., 1::2, :, :] = ((1e5 * (phase[..., 1::2, :, :] + 2 * np.pi)) % (2 * np.pi * 1e5)) / 1e5 - np.pi
-        image = np.abs(image) * np.exp(phase)
+        image = np.abs(image) * np.exp(1j * phase)
         
     # count number of instances
     ninstances = image.shape[0]
