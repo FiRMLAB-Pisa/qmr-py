@@ -53,11 +53,11 @@ def _get_dicom_paths(dicomdir):
     """
     # get all files in dicom dir
     if isinstance(dicomdir, (tuple, list)):
-        dcm_paths = _get_full_path(dicomdir[0], os.listdir(dicomdir[0]))
+        dcm_paths = _get_full_path(dicomdir[0], sorted(os.listdir(dicomdir[0])))
         for d in range(1, len(dicomdir)):
-            dcm_paths += _get_full_path(dicomdir[d], os.listdir(dicomdir[d]))
+            dcm_paths += _get_full_path(dicomdir[d], sorted(os.listdir(dicomdir[d])))
     else:
-        dcm_paths = _get_full_path(dicomdir, os.listdir(dicomdir))
+        dcm_paths = _get_full_path(dicomdir, sorted(os.listdir(dicomdir)))
                     
     return dcm_paths
 
