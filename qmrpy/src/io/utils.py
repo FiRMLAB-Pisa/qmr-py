@@ -449,19 +449,23 @@ def _get_nifti_affine(dsets, shape):
         n = _get_plane_normal(dsets)
         ds = float(dsets[0].SliceThickness)
     
-        A0 = np.stack((np.append(F[0] * dr, 0),
-                       np.append(F[1] * dc, 0),
-                       np.append(ds * n, 0),
+        A0 = np.stack((np.append(F[0] * dc, 0),
+                       np.append(F[1] * dr, 0),
+                       np.append(-ds * n, 0),
                        np.append(T1, 1)), axis=1)
 
     else: # multi slice case
         N = len(dsets)
         TN = T[:,-1].round(4)
-        A0 = np.stack((np.append(F[0] * dr, 0),
-                       np.append(F[1] * dc, 0),
+        A0 = np.stack((np.append(F[0] * dc, 0),
+                       np.append(F[1] * dr, 0),
                        np.append((TN - T1) / (N - 1), 0),
                        np.append(T1, 1)), axis=1)
+      
         
+    # sign of affine matrix
+    A0[:2, :] *= -1
+    
     # get orientation
     axial_orientation, coronal_orientation, sagittal_orientation = __calculate_slice_orientation__(A0)
     
