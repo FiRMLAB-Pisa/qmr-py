@@ -90,6 +90,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         try:
             dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1052].value = '0.0'
             dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1053].value = '1.0'
+            dsets[n][0x2005, 0x100e].value = 1.0
         except:
             pass
         
