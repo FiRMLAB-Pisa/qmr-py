@@ -62,7 +62,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         
     # get level
     windowMin = np.percentile(image, 5)
-    windowMax = np.percentile(image, 95)                   
+    windowMax = np.percentile(image, 9)                   
     windowWidth = windowMax - windowMin
         
     # set properties
@@ -88,8 +88,8 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
             pass
         
         try:
-            dsets[n].RescaleIntercept = '0'
-            dsets[n].RescaleSlope = '1'
+            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1052].value = '0.0'
+            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1053].value = '1.0'
         except:
             pass
         
