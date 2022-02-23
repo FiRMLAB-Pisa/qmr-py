@@ -82,15 +82,34 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         
         try:
             dsets[n].ImagesInAcquisition = ninstances
-            dsets[n][0x0025, 0x1007].value = ninstances
-            dsets[n][0x0025, 0x1019].value = ninstances
         except:
             pass
-        
+        try:
+            dsets[n][0x0025, 0x1007].value = ninstances
+        except:
+            pass
+        try:
+            dsets[n][0x0025, 0x1019].value = ninstances
+        except:
+            pass        
         try:
             dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1052].value = '0.0'
+        except:
+            pass
+        try:
             dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1053].value = '1.0'
+        except:
+            pass
+        try:
             dsets[n][0x2005, 0x100e].value = 1.0
+        except:
+            pass
+        try:
+            dsets[n][0x0040, 0x9096][0][0x0040,0x9224].value = '0.0'
+        except:
+            pass
+        try:
+            dsets[n][0x0040, 0x9096][0][0x0040,0x9225].value = '1.0'
         except:
             pass
         
