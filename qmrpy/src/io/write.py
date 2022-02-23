@@ -61,17 +61,17 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
     image = image.astype(np.int16)
         
     # get level
-    windowMin = np.percentile(image, 5)
-    windowMax = np.percentile(image, 95)                   
-    windowWidth = windowMax - windowMin
+    # windowMin = np.percentile(image, 5)
+    # windowMax = np.percentile(image, 95)                   
+    # windowWidth = windowMax - windowMin
         
     # set properties
     for n in range(ninstances):
         dsets[n].pixel_array[:] = image[n]
         dsets[n].PixelData = image[n].tobytes()
                 
-        dsets[n].WindowWidth = str(windowWidth)
-        dsets[n].WindowCenter = str(0.5 * windowWidth)
+        # dsets[n].WindowWidth = str(windowWidth)
+        # dsets[n].WindowCenter = str(0.5 * windowWidth)
 
         dsets[n].SeriesDescription = series_description
         dsets[n].SeriesNumber = str(int(dsets[n].SeriesNumber) * 1000)
