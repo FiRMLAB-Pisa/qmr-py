@@ -462,7 +462,9 @@ def _get_nifti_affine(dsets):
                       np.append(T1, 1)), axis=1)
         
     # fix origin of y axis (wonder if it is true for arbitrary orientations...)
-    A[:, -1] = A @ np.array([0, dsets[0].Columns - 1, 0, 1])
+    A_offset = A @ np.array([0, dsets[0].Columns - 1, 0, 1])
+    A_offset[1] *= -1
+    A[:, -1] =A_offset
         
     return A
         
