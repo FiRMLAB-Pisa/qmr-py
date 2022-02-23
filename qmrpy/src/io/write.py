@@ -87,6 +87,8 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         except:
             pass
         
+        dsets[n].EchoNumber = '0'
+        dsets[n][0x0018, 0x0086].value = '1' # Echo Number
         dsets[n].InversionTime = '0'
         dsets[n].EchoTime = '0'
         dsets[n].EchoTrainLength = '1'
