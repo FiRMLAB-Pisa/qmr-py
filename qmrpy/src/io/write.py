@@ -61,15 +61,8 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
     image = image.astype(np.int16)
         
     # get level
-    try:
-        windowMin = np.percentile(image[image < 0], 99)
-    except:
-        windowMin = 0      
-    try:
-        windowMax = np.percentile(image[image > 0], 99)
-    except:
-        windowMax = 0
-                    
+    windowMin = np.percentile(image, 5)
+    windowMax = np.percentile(image, 95)                   
     windowWidth = windowMax - windowMin
         
     # set properties
@@ -84,7 +77,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         dsets[n].SeriesNumber = str(int(dsets[n].SeriesNumber) * 1000)
         dsets[n].SeriesInstanceUID = SeriesInstanceUID
     
-        dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
+        # dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
         dsets[n].InstanceNumber = str(n + 1)
         
         try:
@@ -156,7 +149,7 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     dz = round(float(info['template'][0].SliceThickness), 4)
     
     # get affine
-    A = utils._get_nifti_affine(info['template'])
+    A = utils._get_nifti_affine(info['template'], image.shape[-3:])
     
     # reformat image
     image = np.flip(np.flip(image.transpose(), axis=0), axis=1)

@@ -401,38 +401,38 @@ def _get_dicom_template(dsets, index):
     for n in range(len(index)):
         dset = copy.deepcopy(dsets[index[n]])
         
-        dset.pixel_array[:] = 0.0
-        dset.PixelData = dset.pixel_array.tobytes()
+        # dset.pixel_array[:] = 0.0
+        # dset.PixelData = dset.pixel_array.tobytes()
                 
-        dset.WindowWidth = None
-        dset.WindowCenter = None
+        # dset.WindowWidth = None
+        # dset.WindowCenter = None
 
-        dset.SeriesDescription = None
+        # dset.SeriesDescription = None
         dset.SeriesNumber = SeriesNumber
-        dset.SeriesInstanceUID = None
+        # dset.SeriesInstanceUID = None
     
-        dset.SOPInstanceUID = None
-        dset.InstanceNumber = None
+        # # dset.SOPInstanceUID = None
+        # # dset.InstanceNumber = None
         
-        try:
-            dset.ImagesInAcquisition = None
-            dset[0x0025, 0x1007].value = None
-            dset[0x0025, 0x1019].value = None
-        except:
-            pass
+        # try:
+        #     dset.ImagesInAcquisition = None
+        #     dset[0x0025, 0x1007].value = None
+        #     dset[0x0025, 0x1019].value = None
+        # except:
+        #     pass
         
-        dset.InversionTime = '0'
-        dset.EchoTime = '0'
-        dset.EchoTrainLength = '1'
-        dset.RepetitionTime = '0'
-        dset.FlipAngle = '0'
+        # dset.InversionTime = '0'
+        # dset.EchoTime = '0'
+        # dset.EchoTrainLength = '1'
+        # dset.RepetitionTime = '0'
+        # dset.FlipAngle = '0'
         
         template.append(dset)
     
     return template
 
 
-def _get_nifti_affine(dsets):
+def _get_nifti_affine(dsets, shape):
     """
     Return affine transform between voxel coordinates and mm coordinates as
     described in https://nipy.org/nibabel/dicom/spm_dicom.html#spm-volume-sorting
@@ -448,23 +448,169 @@ def _get_nifti_affine(dsets):
         n = _get_plane_normal(dsets)
         ds = float(dsets[0].SliceThickness)
     
-        A = np.stack((np.append(F[0] * dr, 0),
-                      np.append(F[1] * dc, 0),
-                      np.append(ds * n, 0),
-                      np.append(T1, 1)), axis=1)
+        A0 = np.stack((np.append(F[0] * dr, 0),
+                       np.append(F[1] * dc, 0),
+                       np.append(ds * n, 0),
+                       np.append(T1, 1)), axis=1)
 
     else: # multi slice case
         N = len(dsets)
         TN = T[:,-1].round(4)
-        A = np.stack((np.append(F[0] * dr, 0),
-                      np.append(F[1] * dc, 0),
-                      np.append((TN - T1) / (N - 1), 0),
-                      np.append(T1, 1)), axis=1)
+        A0 = np.stack((np.append(F[0] * dr, 0),
+                       np.append(F[1] * dc, 0),
+                       np.append((TN - T1) / (N - 1), 0),
+                       np.append(T1, 1)), axis=1)
         
-    # fix origin of y axis (wonder if it is true for arbitrary orientations...)
-    A_offset = A @ np.array([0, dsets[0].Columns - 1, 0, 1])
-    A_offset[1] *= -1
-    A[:, -1] =A_offset
+    # get orientation
+    axial_orientation, coronal_orientation, sagittal_orientation = __calculate_slice_orientation__(A0)
+    
+    # fix affine matrix
+    A = np.eye(4)
+    A[:, 0] = A0[:, sagittal_orientation.normal_component]
+    A[:, 1] = A0[:, coronal_orientation.normal_component]
+    A[:, 2] = A0[:, axial_orientation.normal_component]
+    point = [0, 0, 0, 1]
+            
+    # If the orientation of coordinates is inverted, then the origin of the "new" image
+    # would correspond to the last voxel of the original image
+    # First we need to find which point is the origin point in image coordinates
+    # and then transform it in world coordinates
+    if axial_orientation.x_inverted:
+        point[sagittal_orientation.normal_component] = shape[sagittal_orientation.normal_component] - 1
+
+    if not axial_orientation.y_inverted:
+        point[coronal_orientation.normal_component] = shape[coronal_orientation.normal_component] - 1
+
+    if coronal_orientation.y_inverted:
+        point[axial_orientation.normal_component] = shape[axial_orientation.normal_component] - 1
         
+
+    A[:, 3] = np.dot(A0, point)
+
     return A
+
+
+class SliceOrientation:
+    """
+    Class containing the orientation of a slice.
+    """
+    x_component = None
+    y_component = None
+    normal_component = None
+    x_inverted = False
+    y_inverted = False
+    
+
+def __calculate_slice_orientation__(affine):
+    # Not all image data has the same orientation
+    # We use the affine matrix and multiplying it with one component
+    # of the slice we can find the correct orientation
+    affine_inverse = np.linalg.inv(affine)
+    transformed_x = np.transpose(np.dot(affine_inverse, [[1], [0], [0], [0]]))[0]
+    transformed_y = np.transpose(np.dot(affine_inverse, [[0], [1], [0], [0]]))[0]
+    transformed_z = np.transpose(np.dot(affine_inverse, [[0], [0], [1], [0]]))[0]
+
+    # calculate the most likely x,y,z direction
+    x_component, y_component, z_component = __calc_most_likely_direction__(transformed_x,
+                                                                           transformed_y,
+                                                                           transformed_z)
+
+    # Find slice orientiation for the axial size
+    # Find the index of the max component to know which component is the direction in the size
+    axial_orientation = SliceOrientation()
+    axial_orientation.normal_component = z_component
+    axial_orientation.x_component = x_component
+    axial_orientation.x_inverted = np.sign(transformed_x[axial_orientation.x_component]) < 0
+    axial_orientation.y_component = y_component
+    axial_orientation.y_inverted = np.sign(transformed_y[axial_orientation.y_component]) < 0
+    
+    # Find slice orientiation for the coronal size
+    # Find the index of the max component to know which component is the direction in the size
+    coronal_orientation = SliceOrientation()
+    coronal_orientation.normal_component = y_component
+    coronal_orientation.x_component = x_component
+    coronal_orientation.x_inverted = np.sign(transformed_x[coronal_orientation.x_component]) < 0
+    coronal_orientation.y_component = z_component
+    coronal_orientation.y_inverted = np.sign(transformed_z[coronal_orientation.y_component]) < 0
+    
+    # Find slice orientation for the sagittal size
+    # Find the index of the max component to know which component is the direction in the size
+    sagittal_orientation = SliceOrientation()
+    sagittal_orientation.normal_component = x_component
+    sagittal_orientation.x_component = y_component
+    sagittal_orientation.x_inverted = np.sign(transformed_y[sagittal_orientation.x_component]) < 0
+    sagittal_orientation.y_component = z_component
+    sagittal_orientation.y_inverted = np.sign(transformed_z[sagittal_orientation.y_component]) < 0
+    
+    # Assert that the slice normals are not equal
+    assert axial_orientation.normal_component != coronal_orientation.normal_component
+    assert coronal_orientation.normal_component != sagittal_orientation.normal_component
+    assert sagittal_orientation.normal_component != axial_orientation.normal_component
+    
+    return axial_orientation, coronal_orientation, sagittal_orientation
         
+
+def __calc_most_likely_direction__(transformed_x, transformed_y, transformed_z):
+    """
+    Calculate which is the most likely component for a given direction
+    """
+    # calculate the x component
+    tx_dot_x = np.abs(np.dot(transformed_x, [1, 0, 0, 0]))
+    tx_dot_y = np.abs(np.dot(transformed_x, [0, 1, 0, 0]))
+    tx_dot_z = np.abs(np.dot(transformed_x, [0, 0, 1, 0]))
+    x_dots = [tx_dot_x, tx_dot_y, tx_dot_z]
+    x_component = np.argmax(x_dots)
+    x_max = np.max(x_dots)
+
+    # calculate the y component
+    ty_dot_x = np.abs(np.dot(transformed_y, [1, 0, 0, 0]))
+    ty_dot_y = np.abs(np.dot(transformed_y, [0, 1, 0, 0]))
+    ty_dot_z = np.abs(np.dot(transformed_y, [0, 0, 1, 0]))
+    y_dots = [ty_dot_x, ty_dot_y, ty_dot_z]
+    y_component = np.argmax(y_dots)
+    y_max = np.max(y_dots)
+
+    # calculate the z component
+    tz_dot_x = np.abs(np.dot(transformed_z, [1, 0, 0, 0]))
+    tz_dot_y = np.abs(np.dot(transformed_z, [0, 1, 0, 0]))
+    tz_dot_z = np.abs(np.dot(transformed_z, [0, 0, 1, 0]))
+    z_dots = [tz_dot_x, tz_dot_y, tz_dot_z]
+    z_component = np.argmax(z_dots)
+    z_max = np.max(z_dots)
+
+    # as long as there are duplicate directions try to correct
+    while x_component == y_component or x_component == z_component or y_component == z_component:
+        if x_component == y_component:
+            # keep the strongest one and change the other
+            if x_max >= y_max:  # update the y component
+                y_dots[y_component] = 0
+                y_component = np.argmax(y_dots)
+                y_max = np.max(y_dots)
+            else:  # update the x component
+                x_dots[x_component] = 0
+                x_component = np.argmax(x_dots)
+                x_max = np.max(x_dots)
+
+        if x_component == z_component:
+            # keep the strongest one and change the other
+            if x_max >= z_max:  # update the z component
+                z_dots[z_component] = 0
+                z_component = np.argmax(z_dots)
+                z_max = np.max(z_dots)
+            else:  # update the x component
+                x_dots[x_component] = 0
+                x_component = np.argmax(x_dots)
+                x_max = np.max(x_dots)
+
+        if y_component == z_component:
+            # keep the strongest one and change the other
+            if y_max >= z_max:  # update the z component
+                z_dots[z_component] = 0
+                z_component = np.argmax(z_dots)
+                z_max = np.max(z_dots)
+            else:  # update the y component
+                y_dots[y_component] = 0
+                y_component = np.argmax(y_dots)
+                y_max = np.max(y_dots)
+
+    return x_component, y_component, z_component
