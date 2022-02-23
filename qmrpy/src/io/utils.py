@@ -401,31 +401,32 @@ def _get_dicom_template(dsets, index):
     for n in range(len(index)):
         dset = copy.deepcopy(dsets[index[n]])
         
-        # dset.pixel_array[:] = 0.0
-        # dset.PixelData = dset.pixel_array.tobytes()
+    #     dset.pixel_array[:] = 0.0
+    #     dset.PixelData = dset.pixel_array.tobytes()
                 
-        # dset.WindowWidth = None
-        # dset.WindowCenter = None
+    #     dset.WindowWidth = None
+    #     dset.WindowCenter = None
 
-        # dset.SeriesDescription = None
+    #     dset.SeriesDescription = None
         dset.SeriesNumber = SeriesNumber
-        # dset.SeriesInstanceUID = None
+    #     dset.SeriesInstanceUID = None
     
-        # # dset.SOPInstanceUID = None
-        # # dset.InstanceNumber = None
+    #     dset.SOPInstanceUID = None
+    #     dset.InstanceNumber = None
         
-        # try:
-        #     dset.ImagesInAcquisition = None
-        #     dset[0x0025, 0x1007].value = None
-        #     dset[0x0025, 0x1019].value = None
-        # except:
-        #     pass
+    #     try:
+    #         dset.ImagesInAcquisition = None
+    #         dset[0x0025, 0x1007].value = None
+    #         dset[0x0025, 0x1019].value = None
+    #     except:
+    #         pass
         
-        dset.InversionTime = '0'
-        dset.EchoTime = '0'
-        dset.EchoTrainLength = '1'
-        dset.RepetitionTime = '0'
-        dset.FlipAngle = '0'
+    #     dset.InversionTime = '0'
+        # dset[0x0018, 0x0086].value = '1' # Echo Number
+    #     dset.EchoTime = '0'
+    #     dset.EchoTrainLength = '1'
+    #     dset.RepetitionTime = '0'
+    #     dset.FlipAngle = '0'
         
         template.append(dset)
     
@@ -475,15 +476,17 @@ def _get_nifti_affine(dsets, shape):
     # would correspond to the last voxel of the original image
     # First we need to find which point is the origin point in image coordinates
     # and then transform it in world coordinates
-    if axial_orientation.x_inverted:
+    if not axial_orientation.x_inverted:
+        A[:, 0] = - A[:, 0]
         point[sagittal_orientation.normal_component] = shape[sagittal_orientation.normal_component] - 1
 
-    if not axial_orientation.y_inverted:
+    if axial_orientation.y_inverted:
+        A[:, 1] = - A[:, 1]
         point[coronal_orientation.normal_component] = shape[coronal_orientation.normal_component] - 1
 
     if coronal_orientation.y_inverted:
+        A[:, 2] = - A[:, 2]
         point[axial_orientation.normal_component] = shape[axial_orientation.normal_component] - 1
-        
 
     A[:, 3] = np.dot(A0, point)
 
