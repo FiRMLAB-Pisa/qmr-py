@@ -87,6 +87,12 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         except:
             pass
         
+        dsets[n].InversionTime = '0'
+        dsets[n].EchoTime = '0'
+        dsets[n].EchoTrainLength = '1'
+        dsets[n].RepetitionTime = '0'
+        dsets[n].FlipAngle = '0'
+        
     # generate file names
     filename = ['img-' + str(n).zfill(3) + '.dcm' for n in range(ninstances)]
     

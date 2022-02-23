@@ -421,11 +421,11 @@ def _get_dicom_template(dsets, index):
         # except:
         #     pass
         
-        # dset.InversionTime = '0'
-        # dset.EchoTime = '0'
-        # dset.EchoTrainLength = '1'
-        # dset.RepetitionTime = '0'
-        # dset.FlipAngle = '0'
+        dset.InversionTime = '0'
+        dset.EchoTime = '0'
+        dset.EchoTrainLength = '1'
+        dset.RepetitionTime = '0'
+        dset.FlipAngle = '0'
         
         template.append(dset)
     
