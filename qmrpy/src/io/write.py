@@ -165,7 +165,7 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     A = utils._get_nifti_affine(info['template'], image.shape[-3:])
     
     # reformat image
-    image = np.flip(np.flip(image.transpose(), axis=0), axis=1)
+    image = np.flip(image.transpose(), axis=0)
     
     # cast image
     minval = np.iinfo(np.int16).min
