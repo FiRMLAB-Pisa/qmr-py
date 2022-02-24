@@ -62,7 +62,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         
     # get level
     windowMin = np.percentile(image, 5)
-    windowMax = np.percentile(image, 9)                   
+    windowMax = np.percentile(image, 95)                   
     windowWidth = windowMax - windowMin
         
     # set properties
@@ -92,33 +92,6 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
             dsets[n][0x0025, 0x1019].value = ninstances
         except:
             pass        
-        try:
-            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1052].value = '0.0'
-        except:
-            pass
-        try:
-            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1053].value = '1.0'
-        except:
-            pass
-        try:
-            dsets[n][0x2005, 0x100e].value = 1.0
-        except:
-            pass
-        try:
-            dsets[n][0x0040, 0x9096][0][0x0040,0x9224].value = 0.0
-        except:
-            pass
-        try:
-            dsets[n][0x0040, 0x9096][0][0x0040,0x9225].value = 1.0
-        except:
-            pass
-        
-        dsets[n][0x0018, 0x0086].value = '1' # Echo Number
-        dsets[n].InversionTime = '0'
-        dsets[n].EchoTime = '0'
-        dsets[n].EchoTrainLength = '1'
-        dsets[n].RepetitionTime = '0'
-        dsets[n].FlipAngle = '0'
         
     # generate file names
     filename = ['img-' + str(n).zfill(3) + '.dcm' for n in range(ninstances)]
@@ -184,6 +157,9 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     # get affine
     A = utils._get_nifti_affine(info['template'], image.shape[-3:])
     
+    # reorder image
+    image, A = utils.reorder_voxels(image, A)
+    
     # reformat image
     image = np.flip(image.transpose(), axis=1)
     
@@ -195,19 +171,19 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     image = image.astype(np.int16)
     
     try:
-        windowMin = 0.5 * np.percentile(image[image < 0], 99)
+        windowMin = 0.5 * np.percentile(image[image < 0], 95)
     except:
         windowMin = 0
     try:
-        windowMax = 0.5 * np.percentile(image[image > 0], 99)
+        windowMax = 0.5 * np.percentile(image[image > 0], 95)
     except:
         windowMax = 0
         
     # write nifti
     nifti = nib.Nifti1Image(image, A)
     nifti.header['pixdim'][1:4] = np.array([dx, dy, dz])
-    nifti.header['sform_code'] = 3
-    nifti.header['qform_code'] = 3
+    nifti.header['sform_code'] = 1
+    nifti.header['qform_code'] = 1
     nifti.header['cal_min'] = windowMin 
     nifti.header['cal_max'] = windowMax 
     nifti.header.set_xyzt_units('mm', 'sec')

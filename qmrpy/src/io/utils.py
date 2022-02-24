@@ -16,6 +16,7 @@ import numpy as np
 
 
 import pydicom
+from nibabel.orientations import io_orientation, apply_orientation, inv_ornt_aff
 
 
 def _load_dcm(dicomdir):
@@ -401,32 +402,58 @@ def _get_dicom_template(dsets, index):
     for n in range(len(index)):
         dset = copy.deepcopy(dsets[index[n]])
         
-    #     dset.pixel_array[:] = 0.0
-    #     dset.PixelData = dset.pixel_array.tobytes()
+        dset.pixel_array[:] = 0.0
+        dset.PixelData = dset.pixel_array.tobytes()
                 
-    #     dset.WindowWidth = None
-    #     dset.WindowCenter = None
+        dset.WindowWidth = None
+        dset.WindowCenter = None
 
-    #     dset.SeriesDescription = None
+        dset.SeriesDescription = None
         dset.SeriesNumber = SeriesNumber
-    #     dset.SeriesInstanceUID = None
+        dset.SeriesInstanceUID = None
     
-    #     dset.SOPInstanceUID = None
-    #     dset.InstanceNumber = None
+        dset.SOPInstanceUID = None
+        dset.InstanceNumber = None
         
-    #     try:
-    #         dset.ImagesInAcquisition = None
-    #         dset[0x0025, 0x1007].value = None
-    #         dset[0x0025, 0x1019].value = None
-    #     except:
-    #         pass
+        try:
+            dsets[n].ImagesInAcquisition = None
+        except:
+            pass
+        try:
+            dsets[n][0x0025, 0x1007].value = None
+        except:
+            pass
+        try:
+            dsets[n][0x0025, 0x1019].value = None
+        except:
+            pass   
+        try:
+            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1052].value = '0.0'
+        except:
+            pass
+        try:
+            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1053].value = '1.0'
+        except:
+            pass
+        try:
+            dsets[n][0x2005, 0x100e].value = 1.0
+        except:
+            pass
+        try:
+            dsets[n][0x0040, 0x9096][0][0x0040,0x9224].value = 0.0
+        except:
+            pass
+        try:
+            dsets[n][0x0040, 0x9096][0][0x0040,0x9225].value = 1.0
+        except:
+            pass
         
-    #     dset.InversionTime = '0'
-        # dset[0x0018, 0x0086].value = '1' # Echo Number
-    #     dset.EchoTime = '0'
-    #     dset.EchoTrainLength = '1'
-    #     dset.RepetitionTime = '0'
-    #     dset.FlipAngle = '0'
+        dsets[n][0x0018, 0x0086].value = '1' # Echo Number
+        dsets[n].InversionTime = '0'
+        dsets[n].EchoTime = '0'
+        dsets[n].EchoTrainLength = '1'
+        dsets[n].RepetitionTime = '0'
+        dsets[n].FlipAngle = '0'
         
         template.append(dset)
     
@@ -621,3 +648,121 @@ def __calc_most_likely_direction__(transformed_x, transformed_y, transformed_z):
                 y_max = np.max(y_dots)
 
     return x_component, y_component, z_component
+
+def ornt_transform(start_ornt, end_ornt):
+    """Return the orientation that transforms from `start_ornt` to `end_ornt`.
+    
+    Args:
+        start_ornt : Initial orientation.
+        end_ornt : Final orientation.
+        
+    Returns:
+        orientations : The orientation that will transform the `start_ornt` to the `end_ornt`.
+    """
+    start_ornt = np.asarray(start_ornt)
+    end_ornt = np.asarray(end_ornt)
+    
+    if start_ornt.shape != end_ornt.shape:
+        raise ValueError("The orientations must have the same shape")
+    if start_ornt.shape[1] != 2:
+        raise ValueError("Invalid shape for an orientation: %s" % start_ornt.shape)
+        
+    result = np.empty_like(start_ornt)
+    for end_in_idx, (end_out_idx, end_flip) in enumerate(end_ornt):
+        for start_in_idx, (start_out_idx, start_flip) in enumerate(start_ornt):
+            if end_out_idx == start_out_idx:
+                if start_flip == end_flip:
+                    flip = 1
+                else:
+                    flip = -1
+                result[start_in_idx, :] = [end_in_idx, flip]
+                break
+        else:
+            raise ValueError("Unable to find out axis %d in start_ornt" % end_out_idx)
+            
+    return result
+
+
+def axcodes2ornt(axcodes, labels=None):
+    """ Convert axis codes `axcodes` to an orientation.
+    
+    Args:
+        axcodes : axis codes - see ornt2axcodes docstring
+        labels : optional, None or sequence of (2,) sequences
+            (2,) sequences are labels for (beginning, end) of output axis.  That
+            is, if the first element in `axcodes` is ``front``, and the second
+            (2,) sequence in `labels` is ('back', 'front') then the first
+            row of `ornt` will be ``[1, 1]``. If None, equivalent to
+            ``(('L','R'),('P','A'),('I','S'))`` - that is - RAS axes.
+            
+    Returns:
+        ornt : orientation array - see io_orientation docstring
+    
+    """
+
+    if labels is None:
+        labels = list(zip('LPI', 'RAS'))
+
+    n_axes = len(axcodes)
+    ornt = np.ones((n_axes, 2), dtype=np.int8) * np.nan
+    for code_idx, code in enumerate(axcodes):
+        for label_idx, codes in enumerate(labels):
+            if code is None:
+                continue
+            if code in codes:
+                if code == codes[0]:
+                    ornt[code_idx, :] = [label_idx, -1]
+                else:
+                    ornt[code_idx, :] = [label_idx, 1]
+                break
+    return ornt
+
+
+def reorder_voxels(vox_array, affine, voxel_order='RAS'):
+    """Reorder the given voxel array and corresponding affine.
+    
+    Args:
+        vox_array : The array of voxel data
+        affine : The affine for mapping voxel indices to Nifti patient space
+        voxel_order : A three character code specifing the desired ending point for rows,
+                      columns, and slices in terms of the orthogonal axes of patient space:
+                      (l)eft, (r)ight, (a)nterior, (p)osterior, (s)uperior, and (i)nferior.
+        
+    Returns:
+        out_vox : An updated view of vox_array.
+        out_aff : A new array with the updated affine
+        reorient_transform : The transform used to update the affine.
+        ornt_trans : The orientation transform used to update the orientation.
+    """
+    #Check if voxel_order is valid
+    voxel_order = voxel_order.upper()
+    if len(voxel_order) != 3:
+        raise ValueError('The voxel_order must contain three characters')
+    dcm_axes = ['LR', 'AP', 'SI']
+    for char in voxel_order:
+        if not char in 'LRAPSI':
+            raise ValueError('The characters in voxel_order must be one '
+                             'of: L,R,A,P,I,S')
+        for idx, axis in enumerate(dcm_axes):
+            if char in axis:
+                del dcm_axes[idx]
+    if len(dcm_axes) != 0:
+        raise ValueError('No character in voxel_order corresponding to '
+                         'axes: %s' % dcm_axes)
+
+    #Check the vox_array and affine have correct shape/size
+    if len(vox_array.shape) < 3:
+        raise ValueError('The vox_array must be at least three dimensional')
+    if affine.shape != (4, 4):
+        raise ValueError('The affine must be 4x4')
+
+    #Pull the current index directions from the affine
+    orig_ornt = io_orientation(affine)
+    new_ornt = axcodes2ornt(voxel_order)
+    ornt_trans = ornt_transform(orig_ornt, new_ornt)
+    orig_shape = vox_array.shape
+    vox_array = apply_orientation(vox_array, ornt_trans)
+    aff_trans = inv_ornt_aff(ornt_trans, orig_shape)
+    affine = np.dot(affine, aff_trans)
+
+    return vox_array, affine
