@@ -521,7 +521,7 @@ def _get_nifti_affine(dsets, shape):
 
     A[:, 3] = np.dot(A0, point)
 
-    return A
+    return A, A0
 
 
 class SliceOrientation:

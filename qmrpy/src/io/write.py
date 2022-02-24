@@ -155,7 +155,7 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     dz = round(float(info['template'][0].SliceThickness), 4)
     
     # get affine
-    A = utils._get_nifti_affine(info['template'], image.shape[-3:])
+    A, _ = utils._get_nifti_affine(info['template'], image.shape[-3:])
     
     # reorder image
     image, A = utils.reorder_voxels(image, A)
