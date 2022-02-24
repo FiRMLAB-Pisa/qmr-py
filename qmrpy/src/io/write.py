@@ -158,7 +158,7 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     A, _ = utils._get_nifti_affine(info['template'], image.shape[-3:])
     
     # reorder image
-    image, A = utils.reorder_voxels(image, A)
+    # image, A = utils.reorder_voxels(image, A)
     
     # reformat image
     image = np.flip(image.transpose(), axis=1)
@@ -182,8 +182,8 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     # write nifti
     nifti = nib.Nifti1Image(image, A)
     nifti.header['pixdim'][1:4] = np.array([dx, dy, dz])
-    nifti.header['sform_code'] = 1
-    nifti.header['qform_code'] = 1
+    nifti.header['sform_code'] = 3
+    nifti.header['qform_code'] = 3
     nifti.header['cal_min'] = windowMin 
     nifti.header['cal_max'] = windowMax 
     nifti.header.set_xyzt_units('mm', 'sec')
