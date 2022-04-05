@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-External interface
+External interface for algorithms.
 
 Created on Thu Feb 10 17:33:53 2022
 
@@ -12,10 +12,11 @@ from time import time
 
 
 import click
+import numpy as np
 from tqdm import tqdm
 
 
-from qmrpy import io, inference
+from qmrpy import io, inference, alg
 
 
 __all__ = ['longitudinal_relaxation', 'transverse_relaxation', 'transmit_field']
@@ -43,44 +44,7 @@ def longitudinal_relaxation(input_path, output_path, output_label, save_dicom, s
     
     where TI is the Inversion Time.
     """
-    # check input
-    if input_path.endswith('/') or input_path.endswith('\\'):
-        folders = os.listdir(input_path)
-        input_path = [os.path.join(input_path, folder) for folder in folders]
-            
-    click.echo("starting processing...")
-    t_start = time()
-    
-    # progress bar step size
-    step = 1
-    
-    with tqdm(total=3) as pbar:
-        pbar.set_description("loading input data...")
-        img, info = io.read_dicom(input_path)
-        ti = info['TI']
-        pbar.update(step)
-        
-        # mask data
-        if mask_threshold > 0:
-            mask = inference.utils.mask(img)
-        else:
-            mask = None
-            
-        pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map = inference.ir_se_t1_fitting(img, ti, mask)
-        pbar.update(step)
-        
-        pbar.set_description("saving output to disk...")
-        if save_dicom:
-            io.write_dicom(longitudinal_relaxation_map, info, output_label, output_path)        
-        if save_nifti:
-            io.write_nifti(longitudinal_relaxation_map, info, output_label, output_path)
-        pbar.update(step)
-        
-    t_end = time()
-    click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
-    
-    return longitudinal_relaxation_map
+    alg.longitudinal_relaxation(input_path, output_path, output_label, save_dicom, save_nifti, mask_threshold)
 
     
 # wrap into command line
@@ -104,46 +68,9 @@ def transverse_relaxation(input_path, output_path, output_label, save_dicom, sav
     
     where T2 is replaced by T2* for Gradient Echo data and TE is the Echo Time.
     """
-    # check input
-    if input_path.endswith('/') or input_path.endswith('\\'):
-        folders = os.listdir(input_path)
-        input_path = [os.path.join(input_path, folder) for folder in folders]
-            
-    click.echo("starting processing...")
-    t_start = time()
-    
-    # progress bar step size
-    step = 1
-    
-    with tqdm(total=3) as pbar:
-        pbar.set_description("loading input data...")
-        img, info = io.read_dicom(input_path)
-        te = info['TE']
-        pbar.update(step)
-        
-        # mask data
-        if mask_threshold > 0:
-            mask = inference.utils.mask(img)
-        else:
-            mask = None
-            
-        pbar.set_description("computing transverse relaxation map...")
-        transverse_relaxation_map = inference.me_transverse_relaxation_fitting(img, te, mask)
-        pbar.update(step)
-        
-        pbar.set_description("saving output to disk...")
-        if save_dicom:
-            io.write_dicom(transverse_relaxation_map, info, output_label, output_path)         
-        if save_nifti:
-            io.write_nifti(transverse_relaxation_map, info, output_label, output_path)
-        pbar.update(step)
-        
-    t_end = time()
-    click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
-    
-    return transverse_relaxation_map
-    
+    alg.transverse_relaxation(input_path, output_path, output_label, save_dicom, save_nifti, mask_threshold)
 
+    
 # wrap into command line
 cli.add_command(transverse_relaxation)
 
@@ -165,46 +92,36 @@ def transmit_field(input_path, output_path, output_label, save_dicom, save_nifti
     
     where theta is the nominal Flip Angle.
     """
-    # check input
-    if input_path.endswith('/') or input_path.endswith('\\'):
-        folders = os.listdir(input_path)
-        input_path = [os.path.join(input_path, folder) for folder in folders]
-            
-    click.echo("starting processing...")
-    t_start = time()
-    
-    # progress bar step size
-    step = 1
-    
-    with tqdm(total=3) as pbar:
-        pbar.set_description("loading input data...")
-        img, info = io.read_dicom(input_path)
-        fa = info['FA']
-        pbar.update(step)
-        
-        # mask data
-        if mask_threshold > 0:
-            mask = inference.utils.mask(img)
-        else:
-            mask = None
-            
-        pbar.set_description("computing transmit field magnitude map...")
-        transmit_field_map = inference.b1_dam_fitting(img, fa, mask)
-        pbar.update(step)
-        
-        pbar.set_description("saving output to disk...")
-        if save_dicom:
-            io.write_dicom(transmit_field_map, info, output_label, output_path)          
-        if save_nifti:
-            io.write_nifti(transmit_field_map, info, output_label, output_path)
-        pbar.update(step)
-        
-    t_end = time()
-    click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
-    
-    return transmit_field_map
+    alg.transmit_field(input_path, output_path, output_label, save_dicom, save_nifti, mask_threshold)
     
 
 # wrap into command line
 cli.add_command(transmit_field)
+
+
+@click.command()
+@click.option( '--input-path', required=True, help='location on disk of bSSFP data series in DICOM format')
+@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-label', default='conductivity_map', show_default=True, help='name of the output files')
+@click.option( '--save-dicom', default=True, show_default=True, help='save reconstructed map as DICOM')
+@click.option( '--save-nifti', default=True, show_default=True, help='save reconstructed map as NiFTI')
+@click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
+@click.option( '--laplacian-kernel-width', default=0.05, show_default=True, help='Width of local parabolic phase fitting window (in [voxel])')
+@click.option( '--fitting-threshold', default=5, show_default=True, help='Threshold to restrict local parabolic phase fitting [%].')
+@click.option( '--median-filter-width', default=0.05, show_default=True, help='Width of adaptive median filter  (in [voxel])')
+def helmholtz_ept(input_path, output_path, output_label, save_dicom, save_nifti, mask_threshold, laplacian_kernel_width, fitting_threshold, median_filter_width):
+    """
+    Reconstruct quantitative conductivity maps from bSSFP data.
+    
+    Use the following signal model:
+        
+        s(t) = - Nabla Phi / Phi / (omega0 * mu0)
+    
+    where Phi is bSSFP phase, omega0 is the larmor frequency and mu0 is the vacuum permittivity.
+    """
+    alg.helmholtz_ept(input_path, output_path, output_label, save_dicom, save_nifti, mask_threshold, laplacian_kernel_width, fitting_threshold, median_filter_width)
+    
+    
+# wrap into command line
+cli.add_command(longitudinal_relaxation)
 
