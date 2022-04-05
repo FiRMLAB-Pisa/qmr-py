@@ -15,7 +15,7 @@ from numba import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from scipy.ndimage import gaussian_filter
 
 
-import unwrap
+from skimage.restoration import unwrap_phase as unwrap
 from NumbaMinpack import minpack_sig, lmdif
 
 
