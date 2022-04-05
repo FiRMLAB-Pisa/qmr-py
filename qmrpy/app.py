@@ -19,7 +19,7 @@ from tqdm import tqdm
 from qmrpy import io, inference, alg
 
 
-__all__ = ['longitudinal_relaxation', 'transverse_relaxation', 'transmit_field']
+__all__ = ['longitudinal_relaxation', 'transverse_relaxation', 'transmit_field', 'helmholtz_ept']
 
 
 @click.group()
@@ -123,5 +123,6 @@ def helmholtz_ept(input_path, output_path, output_label, save_dicom, save_nifti,
     
     
 # wrap into command line
-cli.add_command(longitudinal_relaxation)
+cli.add_command(helmholtz_ept)
+
 

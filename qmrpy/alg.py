@@ -209,13 +209,13 @@ def helmholtz_ept(input_path, output_path='./output', output_label='conductivity
         omega0 = 2 * np.pi * 64.0e6 / 1.5 * float(info['template'][0].MagneticFieldStrength)
         
         # interpolate
-        scale = np.array(img.shape[1:]) / 352
-        re_img = torch.from_numpy(img.real)
-        im_img = torch.from_numpy(img.imag)
-        re_img = F.interpolate(re_img.unsqueeze(0).unsqueeze(0), size=[img.shape[0]] + [352, 352])[0][0].numpy()
-        im_img = F.interpolate(im_img.unsqueeze(0).unsqueeze(0), size=[img.shape[0]] + [352, 352])[0][0].numpy()
-        img = re_img + 1j * im_img
-        resolution[1:] *= scale
+        #  scale = np.array(img.shape[1:]) / 352
+        # re_img = torch.from_numpy(img.real)
+        # im_img = torch.from_numpy(img.imag)
+        # re_img = F.interpolate(re_img.unsqueeze(0).unsqueeze(0), size=[img.shape[0]] + [352, 352])[0][0].numpy()
+        # im_img = F.interpolate(im_img.unsqueeze(0).unsqueeze(0), size=[img.shape[0]] + [352, 352])[0][0].numpy()
+        # img = re_img + 1j * im_img
+        # resolution[1:] *= scale
         
         pbar.update(step)
         

@@ -74,7 +74,7 @@ def helmholtz_conductivity_fitting(input: np.ndarray, resolution: np.ndarray, om
     
     # uwrap
     true_phase = input_phase[input_phase.shape[0] // 2, input_phase.shape[1] // 2, input_phase.shape[2] // 2]
-    input_phase = unwrap.unwrap(input_phase)
+    input_phase = unwrap(input_phase)
     input_phase = input_phase - input_phase[input_phase.shape[0] // 2, input_phase.shape[1] // 2, input_phase.shape[2] // 2] + true_phase
         
     # preallocate output
