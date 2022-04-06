@@ -22,7 +22,7 @@ from NumbaMinpack import minpack_sig, lmdif
 from qmrpy.src.inference import utils
 
 
-# vacuum permittivity
+# vacuum permeability
 mu0 = 4.0e-7 * np.pi # [H/m]
 
 
@@ -69,8 +69,8 @@ def helmholtz_conductivity_fitting(input: np.ndarray, resolution: np.ndarray, om
         input = gaussian_filter(input.real, gaussian_kernel_sigma) + 1j * gaussian_filter(input.imag, gaussian_kernel_sigma)
     
     # get magnitude and phase
-    input_mag = np.abs(mask * input)
-    input_phase = np.angle(mask * input)
+    input_mag = mask * np.abs(input)
+    input_phase = mask * np.angle(input)
     
     # uwrap
     true_phase = input_phase[input_phase.shape[0] // 2, input_phase.shape[1] // 2, input_phase.shape[2] // 2]
@@ -88,9 +88,7 @@ def helmholtz_conductivity_fitting(input: np.ndarray, resolution: np.ndarray, om
     output[mask_out] = out_tmp.sum(axis=-1)
     
     # finish computation
-    input_phase_inv = input_phase.copy()
-    input_phase_inv[input_phase == 0] = 1.0
-    output = output / input_phase_inv / omega0 / mu0
+    output = -0.5 * output / omega0 / mu0
     
     # post-process
     if median_filter_width is not None and median_filter_width > 0:
