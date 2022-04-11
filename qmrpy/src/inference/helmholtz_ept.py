@@ -16,10 +16,11 @@ from scipy.ndimage import gaussian_filter
 
 
 from skimage.restoration import unwrap_phase as unwrap
-from NumbaMinpack import minpack_sig, lmdif
+# from NumbaMinpack import minpack_sig, lmdif
 
 
 from qmrpy.src.inference import utils
+from qmrpy.src.inference.LM import lmdif
 
 
 # vacuum permeability
@@ -34,9 +35,10 @@ __all__ = ['helmholtz_conductivity_fitting']
 
 
 def helmholtz_conductivity_fitting(input: np.ndarray, resolution: np.ndarray, omega0: float,
-                                   gaussian_kernel_sigma: float = None,
-                                   laplacian_kernel_width: int = 20, fitting_threshold: float = 10.0, 
-                                   median_filter_width: int = 20, mask: np.ndarray = None) -> np.ndarray:
+                                   gaussian_kernel_sigma: float = 0.0, gaussian_weight_sigma: float = 0.0,
+                                   laplacian_kernel_width: int = 16, median_filter_width: int = 16,
+                                   fitting_threshold: float = np.Inf, 
+                                   mask: np.ndarray = None) -> np.ndarray:
     """
     Calculate conductivity map from bSSFP data.
     
@@ -54,14 +56,14 @@ def helmholtz_conductivity_fitting(input: np.ndarray, resolution: np.ndarray, om
         output (ndarray): Conductivity map of size (nz, ny, nx) in [S/m].
     """
     # preserve input
-    input = input.copy()
+    input = input.copy().astype(np.complex64)
         
     # get mask
     if mask is None:
         mask = utils.mask(input)
     
     # preallocate output
-    output = np.zeros(input.shape, dtype=np.float64)
+    output = np.zeros(input.shape, dtype=np.float32)
         
     # preprocess input        
     input = np.ascontiguousarray(input, dtype=np.complex128)
@@ -70,19 +72,20 @@ def helmholtz_conductivity_fitting(input: np.ndarray, resolution: np.ndarray, om
     
     # get magnitude and phase
     input_mag = mask * np.abs(input)
-    input_phase = mask * np.angle(input)
+    input_phase = np.angle(input)
     
     # uwrap
     true_phase = input_phase[input_phase.shape[0] // 2, input_phase.shape[1] // 2, input_phase.shape[2] // 2]
-    input_phase = unwrap(input_phase)
+    input_phase = mask * unwrap(input_phase)
     input_phase = input_phase - input_phase[input_phase.shape[0] // 2, input_phase.shape[1] // 2, input_phase.shape[2] // 2] + true_phase
         
     # preallocate output
-    out_tmp, tmp, todo, mask_out, grid = HelmholtzConductivity.prepare_data(input_mag.copy(), input_phase.copy(), resolution, laplacian_kernel_width, fitting_threshold, mask)
+    out_tmp, tmp, todo, mask_out, grid = HelmholtzConductivity.prepare_data(input_mag.copy(), input_phase.copy(), resolution, laplacian_kernel_width, fitting_threshold, mask, gaussian_weight_sigma)
     
     # do actual fit
-    pointer = HelmholtzConductivity.get_function_pointer(laplacian_kernel_width)
-    HelmholtzConductivity.fitting(out_tmp, tmp, grid, todo.astype(np.float64), pointer)
+    pointer = HelmholtzConductivity.get_function_pointer()
+    # pointer = HelmholtzConductivity.get_function_pointer(laplacian_kernel_width)
+    HelmholtzConductivity.fitting(out_tmp, tmp, grid, todo, pointer)
         
     # reshape
     output[mask_out] = out_tmp.sum(axis=-1)
@@ -94,6 +97,7 @@ def helmholtz_conductivity_fitting(input: np.ndarray, resolution: np.ndarray, om
     if median_filter_width is not None and median_filter_width > 0:
         _, tmp, todo, mask_out, _ = HelmholtzConductivity.prepare_data(input_mag.copy(), output.copy(), resolution, median_filter_width, fitting_threshold, mask)
         
+        todo = todo > 0
         tmp = [np.concatenate([tmp[n, ax, todo[n, ax]] for ax in range(3)]) for n in range(todo.shape[0])]
         out_tmp = np.zeros(todo.shape[0], dtype=np.float64)
         
@@ -111,38 +115,56 @@ class HelmholtzConductivity:
     """
     Helmholtz-based Conductivity Mapping related routines.
     """
-    @staticmethod
-    @nb.njit(cache=True, fastmath=True)
-    def signal_model(x, a, b, c):
-        return a * x**2 + b * x + c
+    # @staticmethod
+    # @nb.njit(cache=True, fastmath=True)
+    # def signal_model(x, a, b, c):
+    #     return a * x**2 + b * x + c
     
-    @staticmethod
-    def get_function_pointer(width):
+    # @staticmethod
+    # def get_function_pointer(width):
         
-        # get function
-        func = HelmholtzConductivity.signal_model 
+    #     # get function
+    #     func = HelmholtzConductivity.signal_model 
         
-        @nb.cfunc(minpack_sig)
-        def _optimize(params_, res, args_):
+    #     @nb.cfunc(minpack_sig)
+    #     def _optimize(params_, res, args_):
             
-            # get parameters
-            params = nb.carray(params_, (3,))
-            a, b, c  = params
+    #         # get parameters
+    #         params = nb.carray(params_, (3,))
+    #         a, b, c  = params
             
-            # get variables
-            args = nb.carray(args_, (3 * width,))
-            x = args[:width]
-            y = args[width:2*width]
-            w = args[2*width:]
+    #         # get variables
+    #         args = nb.carray(args_, (3 * width,))
+    #         x = args[:width]
+    #         y = args[width:2*width]
+    #         w = args[2*width:]
             
-            # compute residual
-            for i in range(width):
-                res[i] = w[i] * (func(x[i], a, b, c) - y[i]) 
+    #         # compute residual
+    #         for i in range(width):
+    #             res[i] = w[i] * (func(x[i], a, b, c) - y[i]) 
                 
-        return _optimize.address
+    #     return _optimize.address
     
     @staticmethod
-    @nb.njit(parallel=True, fastmath=True)
+    def get_function_pointer():
+        
+        @nb.njit(cache=True, fastmath=True)
+        def signal_model(params, args):
+        
+            # calculate elements
+            f = args[2] * ((params[0] * args[0]**2 + params[1] * args[0] + params[2]) - args[1])
+            
+            # analytical jacobian
+            Jf0 = args[2] * args[0]**2
+            Jf1 = args[2] * args[0]
+            Jf2 = args[2]
+
+            return f, np.stack((Jf0, Jf1, Jf2), axis=0)
+        
+        return signal_model
+    
+    @staticmethod
+    @nb.njit(fastmath=True)
     def fitting(output, input, grid, todo, optimize_ptr):
         
         # general fitting options
@@ -151,14 +173,21 @@ class HelmholtzConductivity:
                                 
         # loop over voxels
         for n in nb.prange(nvoxels):
-            for ax in range(3):
-                args = np.concatenate((grid[ax], input[n][ax], todo[n][ax]))         
-                fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
-                if success:
-                    output[n, ax] = fitparam[0]
+            args = (grid, input[n], todo[n])  
+            try:
+                fitparam = lmdif(optimize_ptr , initial_guess, args)
+                output[n] = fitparam[0]
+            except:
+                pass
+                
+            # args = np.concatenate((grid[ax], input[n][ax], todo[n][ax]))         
+            # fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
+            # if success:
+            #     output[n, ax] = fitparam[0]
+                        
                 
     @staticmethod
-    def prepare_data(input_mag, value, resolution, kernel_width, fitting_threshold, mask):
+    def prepare_data(input_mag, value, resolution, kernel_width, fitting_threshold, mask, gauss_sigma=0):
         
         # determine number of non-zero element
         nvoxels = mask.sum()
@@ -177,6 +206,7 @@ class HelmholtzConductivity:
         
         # pad
         input_mag = np.pad(input_mag, ((width, width), (width, width), (width, width)))
+        input_mag = input_mag / input_mag.max()
         value = np.pad(value, ((width, width), (width, width), (width, width)))
         
         i += width
@@ -205,7 +235,14 @@ class HelmholtzConductivity:
         # select voxels
         todo = todo[keep]
         tmp = tmp[keep]
+        weight = (weight - weight[..., [width]])[keep]
+        weight = todo * weight
         
+        if gauss_sigma is not None and gauss_sigma > 0:
+            weight = np.exp(-weight**2/(2*gauss_sigma**2))
+        else:
+            weight = weight != 0
+            
         mask_out = np.zeros(mask.shape, mask.dtype)
         mask_out[np.argwhere(mask)[keep][:, 0], np.argwhere(mask)[keep][:, 1], np.argwhere(mask)[keep][:, 2]] = True
         
@@ -214,9 +251,9 @@ class HelmholtzConductivity:
         grid = np.stack(grid, axis=0)
                 
         # preallocate output
-        out = np.zeros((todo.shape[0], 3), grid.dtype)
+        out = np.zeros((weight.shape[0], 3), grid.dtype)
         
-        return out, tmp.astype(np.float64), todo, mask_out, grid
+        return out.astype(np.float32), tmp.astype(np.float32), weight.astype(np.float32), mask_out, grid.astype(np.float32)
     
     @staticmethod
     @nb.njit(parallel=True, fastmath=True)

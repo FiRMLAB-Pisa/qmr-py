@@ -10,7 +10,8 @@ import numpy as np
 import numba as nb
 
 
-from NumbaMinpack import minpack_sig, lmdif
+# from NumbaMinpack import minpack_sig, lmdif
+from qmrpy.src.inference.LM import lmdif
 
 
 __all__ = ['me_transverse_relaxation_fitting']
@@ -52,7 +53,8 @@ def me_transverse_relaxation_fitting(input: np.ndarray, te: float, mask: np.ndar
     output = np.zeros(ishape[1:], input.dtype)
     
     # do actual fit
-    pointer = MultiechoTransverseRelaxationMapping.get_function_pointer(len(te))
+    # pointer = MultiechoTransverseRelaxationMapping.get_function_pointer(len(te))
+    pointer = MultiechoTransverseRelaxationMapping.get_function_pointer()
     MultiechoTransverseRelaxationMapping.fitting(tmp, input, te, pointer)
         
     # reshape
@@ -71,34 +73,51 @@ class MultiechoTransverseRelaxationMapping:
     """
     Multi-echo Spin- (Gradient-) Echo T2 (T2*) Mapping related routines.
     """
-    @staticmethod
-    @nb.njit(cache=True, fastmath=True)
-    def signal_model(te, A, T2):
-        return A * np.exp(- te / T2)
+    # @staticmethod
+    # @nb.njit(cache=True, fastmath=True)
+    # def signal_model(te, A, T2):
+    #     return A * np.exp(- te / T2)
+    
+    # @staticmethod
+    # def get_function_pointer(nte):
+        
+    #     # get function
+    #     func = MultiechoTransverseRelaxationMapping.signal_model 
+        
+    #     @nb.cfunc(minpack_sig)
+    #     def _optimize(params_, res, args_):
+            
+    #         # get parameters
+    #         params = nb.carray(params_, (2,))
+    #         A, T2  = params
+            
+    #         # get variables
+    #         args = nb.carray(args_, (2 * nte,))
+    #         x = args[:nte]
+    #         y = args[nte:]
+            
+    #         # compute residual
+    #         for i in range(nte):
+    #             res[i] = func(x[i], A, T2) - y[i] 
+                
+    #     return _optimize.address
     
     @staticmethod
-    def get_function_pointer(nte):
+    def get_function_pointer():
         
-        # get function
-        func = MultiechoTransverseRelaxationMapping.signal_model 
+        @nb.njit(cache=True, fastmath=True)
+        def signal_model(params, args):
         
-        @nb.cfunc(minpack_sig)
-        def _optimize(params_, res, args_):
+            # calculate elements
+            f = (params[0] * np.exp(-params[1] * args[0])) - args[1]
             
-            # get parameters
-            params = nb.carray(params_, (2,))
-            A, T2  = params
-            
-            # get variables
-            args = nb.carray(args_, (2 * nte,))
-            x = args[:nte]
-            y = args[nte:]
-            
-            # compute residual
-            for i in range(nte):
-                res[i] = func(x[i], A, T2) - y[i] 
-                
-        return _optimize.address
+            # analytical jacobian
+            Jf0 = np.exp(-params[1] * args[0])
+            Jf1 = -params[0] * args[0] * Jf0
+
+            return f, np.stack((Jf0, Jf1), axis=0)
+        
+        return signal_model
     
     @staticmethod
     @nb.njit(parallel=True, fastmath=True)
@@ -106,11 +125,18 @@ class MultiechoTransverseRelaxationMapping:
         
         # general fitting options
         nvoxels, neqs = input.shape
-        initial_guess = np.array([1.0, 50.0], input.dtype) # M0, T2
+        initial_guess = np.array([1.0, 1 / 50.0], input.dtype) # M0, T2
                 
         # loop over voxels
         for n in nb.prange(nvoxels):
-            args = np.append(te, input[n])         
-            fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
-            if success:
-                output[n] = fitparam[-1]
+            args = (te, input[n])  
+            try:
+                fitparam = lmdif(optimize_ptr , initial_guess, args)
+                output[n] = 1 / fitparam[-1]
+            except:
+                pass
+                
+            # args = np.append(te, input[n])         
+            # fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
+            # if success:
+            #     output[n] = fitparam[-1]

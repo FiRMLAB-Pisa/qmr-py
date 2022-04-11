@@ -47,7 +47,7 @@ setuptools.setup(
     package_dir={"qmrpy": "qmrpy"},
     python_requires=">=3.7",
 
-    install_requires=install_requires,
+    # install_requires=install_requires,
     
     entry_points={'console_scripts': ['qmri = qmrpy.app:cli']},
 

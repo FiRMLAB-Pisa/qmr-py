@@ -6,74 +6,83 @@ import numba as nb
 
 
 @nb.njit(cache=True, fastmath=True)
-def jacobian(func, initial, delta=1e-3):
+def jacobian(fun, pars, args, delta=1e-12):
     """
     https://rh8liuqy.github.io/Finite_Difference.html#jacobian-matrix
     """
-    f = func
-    nrow = len(f(initial))
-    ncol = len(initial)
-    output = np.zeros(nrow*ncol)
-    output = output.reshape(nrow,ncol)
-    for i in range(nrow):
-      for j in range(ncol):
-        ej = np.zeros(ncol)
-        ej[j] = 1
-        dij = (f(initial+ delta * ej)[i] - f(initial- delta * ej)[i])/(2*delta)
-        output[i,j] = dij
+    nout = len(fun(pars, args))
+    npars = pars.shape[0]
+         
+    # initialize output and versor in parameter space
+    output = np.zeros((npars, nout), dtype=args[0].dtype)
+    ei = np.zeros(npars, dtype=args[0].dtype)
+    
+    for i in range(npars):
+        ei[i] = 1
+        dij = (fun(pars + delta * ei, args) - fun(pars- delta * ei, args)) / (2 * delta)
+        ei[i] = 0
+        output[i] = dij
         
     return output
 
 
 @nb.njit(cache=True, fastmath=True)
-def lmdif(fun, pars, args, tau = 1e-2, eps1 = 1e-6, eps2 = 1e-6, kmax = 20):
+def lmdif(fun, initial_guess, args, tau=1e-2, eps1=1e-6, eps2=1e-6, maxiter=20):
     """Implementation of the Levenberg-Marquardt algorithm in pure Python. Solves the normal equations.
     https://gist.github.com/geggo/92c77159a9b8db5aae73
+    
+    Args:
+        fun: function computing residuals of the fitting model: 
+                fun(pars, (predictors, observations) = observations - model(pars, predictors)
+        pars: fitting parameters
+        args: tuple with (predictors, observations)
     """
-    p = pars
-    f, J = fun(p, *args), jacobian(fun, p)
+    p = initial_guess
+    f, J = fun(p, args)
 
-    A = np.inner(J,J)
-    g = np.inner(J,f)
-
-    I = np.eye(len(p))
-
-    k = 0; nu = 2
+    A = np.dot(J, J.T)
+    g = np.dot(J, f.T)
     mu = tau * max(np.diag(A))
-    stop = np.norm(g, np.Inf) < eps1
-    while not stop and k < kmax:
-        k += 1
+
+    I = np.eye(len(p), dtype=f.dtype)
+    
+    # initialize parameters
+    niter = 0
+    nu = 2
+    stop = np.linalg.norm(g, np.Inf) < eps1
+    
+    while not stop and niter < maxiter:
+        niter += 1
+
         try:
-            d = np.solve( A + mu * I, -g)
-        except np.linalg.LinAlgError:
-            stop = True
-            break
+            d = np.linalg.solve(A + mu * I, -g)
+        except: # singular matrix encountered
+            return 0 * p
 
-        if np.norm(d) < eps2*(np.norm(p) + eps2):
-            stop = True
-            break
-
-        pnew = p + d
-
-        fnew, Jnew = fun(pnew, *args), jacobian(fun, pnew)
-        rho = (np.norm(f)**2 - np.norm(fnew)**2)/np.inner(d, mu*d - g)
+        if np.linalg.norm(d) < eps2 * (np.linalg.norm(p) + eps2): # small step
+            return p
         
+        # update
+        pnew = p + d
+        fnew, Jnew = fun(pnew, args)
+        rho = (np.linalg.norm(f)**2 - np.linalg.norm(fnew)**2) / np.dot(d, (mu * d - g).T)
+    
         if rho > 0:
             p = pnew
-            A = np.inner(Jnew, Jnew)
-            g = np.inner(Jnew, fnew)
+            A = np.dot(Jnew, Jnew.T)
+            g = np.dot(Jnew, fnew.T)
             f = fnew
             J = Jnew
-            if (np.norm(g, np.Inf) < eps1): # or norm(fnew) < eps3):
-                stop = True
-                break
-            mu = mu * max([1.0/3, 1.0 - (2*rho - 1)**3])
+            if (np.linalg.norm(g, np.Inf) < eps1): # small gradient
+                return p      
+            mu = mu * max([1.0 / 3, 1.0 - (2 * rho - 1)**3])
             nu = 2.0
         else:
             mu = mu * nu
-            nu = 2*nu
-    else:
-        pass
+            nu = 2 * nu
+            
+    else: # max iter reached
+        return p
     
     return p
 

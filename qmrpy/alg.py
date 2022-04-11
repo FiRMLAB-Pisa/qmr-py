@@ -15,14 +15,14 @@ import click
 import numpy as np
 
 
-import torch
-import torch.nn.functional as F
+from scipy.signal import medfilt
 
 
 from tqdm import tqdm
 
 
 from qmrpy import io, inference
+# from qmrpy.src.inference.helmholtz_ept import HelmholtzConductivity
 
 
 __all__ = ['longitudinal_relaxation', 'transverse_relaxation', 'transmit_field', 'helmholtz_ept']
@@ -39,7 +39,10 @@ def longitudinal_relaxation(input_path, output_path='./output', output_label='lo
     where TI is the Inversion Time.
     """
     # check input
-    if input_path.endswith('/') or input_path.endswith('\\'):
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        
+    elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = os.listdir(input_path)
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
@@ -51,7 +54,7 @@ def longitudinal_relaxation(input_path, output_path='./output', output_label='lo
     
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
-        img, info = io.read_dicom(input_path)
+        img, info = io.read_data(input_path)
         ti = info['TI']
         pbar.update(step)
         
@@ -90,7 +93,10 @@ def transverse_relaxation(input_path, output_path='./output', output_label='tran
     where T2 is replaced by T2* for Gradient Echo data and TE is the Echo Time.
     """
     # check input
-    if input_path.endswith('/') or input_path.endswith('\\'):
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        
+    elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = os.listdir(input_path)
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
@@ -102,7 +108,7 @@ def transverse_relaxation(input_path, output_path='./output', output_label='tran
     
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
-        img, info = io.read_dicom(input_path)
+        img, info = io.read_data(input_path)
         te = info['TE']
         pbar.update(step)
         
@@ -141,7 +147,10 @@ def transmit_field(input_path, output_path='./output', output_label='b1_field_ma
     where theta is the nominal Flip Angle.
     """
     # check input
-    if input_path.endswith('/') or input_path.endswith('\\'):
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        
+    elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = os.listdir(input_path)
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
@@ -153,7 +162,7 @@ def transmit_field(input_path, output_path='./output', output_label='b1_field_ma
     
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
-        img, info = io.read_dicom(input_path)
+        img, info = io.read_data(input_path)
         fa = info['FA']
         pbar.update(step)
         
@@ -181,18 +190,26 @@ def transmit_field(input_path, output_path='./output', output_label='b1_field_ma
     return transmit_field_map
     
 
-def helmholtz_ept(input_path, output_path='./output', output_label='conductivity_map', save_dicom=False, save_nifti=False, mask_threshold=0.05, gaussian_kernel_sigma=0.5, laplacian_kernel_width=20, fitting_threshold=20.0, median_filter_width=50):
+def helmholtz_ept(input_path, output_path='./output', output_label='conductivity_map', 
+                  save_dicom=False, save_nifti=False, 
+                  mask_path=None, mask_threshold=0.05, 
+                  gaussian_kernel_sigma=0.0, gaussian_weight_sigma=0.0, 
+                  laplacian_kernel_width=16, median_filter_width=0,
+                  fitting_threshold=50):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
     
     Use the following signal model:
         
-        s(t) = - Nabla Phi / Phi / (omega0 * mu0)
+        s(t) = - Nabla Phi / Phi / (2 * omega0 * mu0)
     
     where Phi is bSSFP phase, omega0 is the larmor frequency and mu0 is the vacuum permittivity.
     """
     # check input
-    if input_path.endswith('/') or input_path.endswith('\\'):
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        
+    elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = os.listdir(input_path)
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
@@ -204,22 +221,65 @@ def helmholtz_ept(input_path, output_path='./output', output_label='conductivity
     
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
-        img, info = io.read_dicom(input_path)
-        resolution = np.array([float(info['template'][0].SliceThickness)] + [float(dr) for dr in info['template'][0].PixelSpacing]) * 1e-3
-        omega0 = 2 * np.pi * 64.0e6 / 1.5 * float(info['template'][0].MagneticFieldStrength)
+        img, info = io.read_data(input_path)
+        
+        # get info
+        if info['dcm_template']:
+            resolution = np.array([float(info['dcm_template'][0].SliceThickness)] + [float(dr) for dr in info['dcm_template'][0].PixelSpacing]) * 1e-3
+            omega0 = 2 * np.pi * float(info['dcm_template'][0].ImagingFrequency) * 1e6
+        elif info['nifti_template']:
+            resolution = np.flip(info['nifti_template']['header']['pixdim'][1:4]) * 1e-3
+            omega0 = 2 * np.pi * float(info['nifti_template']['json']['ImagingFrequency']) * 1e6
         pbar.update(step)
         
         # mask data
-        if mask_threshold > 0:
+        if mask_path is not None:
+            
+            # get probabilistic segmentation
+            segmentation, _ = io.read_segmentation(mask_path)
+            
+            # get most probable tissue for each voxels
+            winner = (segmentation.sum(axis=0) > 0) * (segmentation.argmax(axis=0) + 1)
+            
+            # build binary mask
+            mask = np.zeros(segmentation.shape, dtype=bool)
+            
+            for n in range(3):
+                mask[n][winner == n+1] = True
+            
+        elif mask_threshold > 0:
             mask = inference.utils.mask(img)
         else:
             mask = None
             
         pbar.set_description("computing conductivity map...")
-        conductivity_map = inference.helmholtz_conductivity_fitting(img, resolution, omega0, 
-                                                                    gaussian_kernel_sigma,
-                                                                    laplacian_kernel_width, fitting_threshold, 
-                                                                    median_filter_width, mask)
+        if len(mask.shape) == 3:
+            conductivity_map = inference.helmholtz_conductivity_fitting(img, resolution, omega0, 
+                                                                        gaussian_kernel_sigma, gaussian_weight_sigma,
+                                                                        laplacian_kernel_width, median_filter_width,
+                                                                        fitting_threshold, mask)
+        
+        else:
+            if np.isscalar(gaussian_kernel_sigma):
+                gaussian_kernel_sigma = 3 * [gaussian_kernel_sigma]
+            
+            if np.isscalar(gaussian_weight_sigma):
+                gaussian_weight_sigma = 3 * [gaussian_weight_sigma]
+                
+            if np.isscalar(laplacian_kernel_width):
+                laplacian_kernel_width = 3 * [laplacian_kernel_width]
+                                                
+            conductivity_map = []
+            for n in range(3):
+                conductivity_map.append(inference.helmholtz_conductivity_fitting(img, resolution, omega0, 
+                                                                                 gaussian_kernel_sigma[n], gaussian_weight_sigma[n],
+                                                                                 laplacian_kernel_width[n], 0, fitting_threshold, mask[n]))
+                
+            # stack result
+            conductivity_map = np.stack(conductivity_map, axis=0)
+            mask = mask.sum(axis=0) > 0
+            conductivity_map = mask * conductivity_map.sum(axis=0)
+                            
         pbar.update(step)
         
         if save_dicom:
@@ -228,6 +288,7 @@ def helmholtz_ept(input_path, output_path='./output', output_label='conductivity
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(conductivity_map, info, output_label, output_path)
+            
         pbar.update(step)
         
     t_end = time()

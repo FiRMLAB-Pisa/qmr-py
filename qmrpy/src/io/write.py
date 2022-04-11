@@ -44,80 +44,81 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
             - FA: ndarray of Flip Angles [deg].
         outpath: desired output path
     """
-    # generate UIDs
-    SeriesInstanceUID = pydicom.uid.generate_uid()
+    if 'dcm_template' in info:
+        # generate UIDs
+        SeriesInstanceUID = pydicom.uid.generate_uid()
+            
+        # count number of instances
+        ninstances = image.shape[0]
         
-    # count number of instances
-    ninstances = image.shape[0]
-    
-    # init dsets
-    dsets = info['template']
-    
-    # cast image
-    minval = np.iinfo(np.int16).min
-    maxval = np.iinfo(np.int16).max
-    image[image < minval] = minval
-    image[image > maxval] = maxval
-    image = image.astype(np.int16)
+        # init dsets
+        dsets = info['dcm_template']
         
-    # get level
-    windowMin = np.percentile(image, 5)
-    windowMax = np.percentile(image, 95)                   
-    windowWidth = windowMax - windowMin
-        
-    # set properties
-    for n in range(ninstances):
-        dsets[n].pixel_array[:] = image[n]
-        dsets[n].PixelData = image[n].tobytes()
-                
-        dsets[n].WindowWidth = str(windowWidth)
-        dsets[n].WindowCenter = str(0.5 * windowWidth)
-
-        dsets[n].SeriesDescription = series_description
-        dsets[n].SeriesNumber = str(int(dsets[n].SeriesNumber) * 1000)
-        dsets[n].SeriesInstanceUID = SeriesInstanceUID
+        # cast image
+        minval = np.iinfo(np.int16).min
+        maxval = np.iinfo(np.int16).max
+        image[image < minval] = minval
+        image[image > maxval] = maxval
+        image = image.astype(np.int16)
+            
+        # get level
+        windowMin = np.percentile(image, 5)
+        windowMax = np.percentile(image, 95)                   
+        windowWidth = windowMax - windowMin
+            
+        # set properties
+        for n in range(ninstances):
+            dsets[n].pixel_array[:] = image[n]
+            dsets[n].PixelData = image[n].tobytes()
+                    
+            dsets[n].WindowWidth = str(windowWidth)
+            dsets[n].WindowCenter = str(0.5 * windowWidth)
     
-        # dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
-        dsets[n].InstanceNumber = str(n + 1)
+            dsets[n].SeriesDescription = series_description
+            dsets[n].SeriesNumber = str(int(dsets[n].SeriesNumber) * 1000)
+            dsets[n].SeriesInstanceUID = SeriesInstanceUID
         
-        try:
-            dsets[n].ImagesInAcquisition = ninstances
-        except:
-            pass
-        try:
-            dsets[n][0x0025, 0x1007].value = ninstances
-        except:
-            pass
-        try:
-            dsets[n][0x0025, 0x1019].value = ninstances
-        except:
-            pass        
+            # dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
+            dsets[n].InstanceNumber = str(n + 1)
+            
+            try:
+                dsets[n].ImagesInAcquisition = ninstances
+            except:
+                pass
+            try:
+                dsets[n][0x0025, 0x1007].value = ninstances
+            except:
+                pass
+            try:
+                dsets[n][0x0025, 0x1019].value = ninstances
+            except:
+                pass        
+            
+        # generate file names
+        filename = ['img-' + str(n).zfill(3) + '.dcm' for n in range(ninstances)]
         
-    # generate file names
-    filename = ['img-' + str(n).zfill(3) + '.dcm' for n in range(ninstances)]
-    
-    # generate output path
-    outpath = os.path.abspath(outpath)
+        # generate output path
+        outpath = os.path.abspath(outpath)
+            
+        # create output folder
+        if not os.path.exists(outpath):
+            os.makedirs(outpath)
+            
+        # get dicompath
+        dcm_paths = [os.path.join(outpath, file) for file in filename]
         
-    # create output folder
-    if not os.path.exists(outpath):
-        os.makedirs(outpath)
+        # generate path / data pair
+        path_data = [[dcm_paths[n], dsets[n]] for n in range(ninstances)]
         
-    # get dicompath
-    dcm_paths = [os.path.join(outpath, file) for file in filename]
+        # make pool of workers
+        pool = ThreadPool(multiprocessing.cpu_count())
     
-    # generate path / data pair
-    path_data = [[dcm_paths[n], dsets[n]] for n in range(ninstances)]
-    
-    # make pool of workers
-    pool = ThreadPool(multiprocessing.cpu_count())
-
-    # each thread write a dicom
-    dsets = pool.map(utils._dcmwrite, path_data)
-    
-    # cloose pool and wait finish   
-    pool.close()
-    pool.join()
+        # each thread write a dicom
+        dsets = pool.map(utils._dcmwrite, path_data)
+        
+        # cloose pool and wait finish   
+        pool.close()
+        pool.join()
     
     
 def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', outpath: str = './'):
@@ -150,16 +151,6 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     if not os.path.exists(outpath):
         os.makedirs(outpath)
         
-    # get voxel size
-    dx, dy = np.array(info['template'][0].PixelSpacing).round(4)
-    dz = round(float(info['template'][0].SliceThickness), 4)
-    
-    # get affine
-    A, _ = utils._get_nifti_affine(info['template'], image.shape[-3:])
-    
-    # reorder image
-    # image, A = utils.reorder_voxels(image, A)
-    
     # reformat image
     image = np.flip(image.transpose(), axis=1)
     
@@ -169,23 +160,38 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     image[image < minval] = minval
     image[image > maxval] = maxval
     image = image.astype(np.int16)
-    
-    try:
-        windowMin = 0.5 * np.percentile(image[image < 0], 95)
-    except:
-        windowMin = 0
-    try:
-        windowMax = 0.5 * np.percentile(image[image > 0], 95)
-    except:
-        windowMax = 0
         
-    # write nifti
-    nifti = nib.Nifti1Image(image, A)
-    nifti.header['pixdim'][1:4] = np.array([dx, dy, dz])
-    nifti.header['sform_code'] = 0
-    nifti.header['qform_code'] = 2
-    nifti.header['cal_min'] = windowMin 
-    nifti.header['cal_max'] = windowMax 
-    nifti.header.set_xyzt_units('mm', 'sec')
+    if 'nifti_template' in info:
+        affine = info['nifti_template']['affine']
+        header = info['nifti_template']['header']
+        nifti = nib.Nifti1Image(image, affine, header)
+        
+    elif 'dcm_template' in info:
+        # get voxel size
+        dx, dy = np.array(info['dcm_template'][0].PixelSpacing).round(4)
+        dz = round(float(info['dcm_template'][0].SliceThickness), 4)
+        
+        # get affine
+        affine, _ = utils._get_nifti_affine(info['dcm_template'], image.shape[-3:])
+                    
+        try:
+            windowMin = 0.5 * np.percentile(image[image < 0], 95)
+        except:
+            windowMin = 0
+        try:
+            windowMax = 0.5 * np.percentile(image[image > 0], 95)
+        except:
+            windowMax = 0
+            
+        # write nifti
+        nifti = nib.Nifti1Image(image, affine)
+        nifti.header['pixdim'][1:4] = np.array([dx, dy, dz])
+        nifti.header['sform_code'] = 0
+        nifti.header['qform_code'] = 2
+        nifti.header['cal_min'] = windowMin 
+        nifti.header['cal_max'] = windowMax 
+        nifti.header.set_xyzt_units('mm', 'sec')
+    
+    # actual writing
     nib.save(nifti, os.path.join(outpath, filename))
     
