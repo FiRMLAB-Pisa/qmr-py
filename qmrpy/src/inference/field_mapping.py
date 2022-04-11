@@ -47,8 +47,8 @@ def b1_dam_fitting(input: np.ndarray, fa: float, mask: np.ndarray = None) -> np.
     cos_flip[cos_flip < 0] = 0
     cos_flip[cos_flip > 1] = 1
     
-    # actual calculation
-    b1map = np.rad2deg(np.arccos(cos_flip)) / min_flip
+    # actual calculation (units: [%])
+    b1map = 100 * np.rad2deg(np.arccos(cos_flip)) / min_flip
     
     # final cleanup
     b1map = np.nan_to_num(b1map)
