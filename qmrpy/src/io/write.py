@@ -44,7 +44,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
             - FA: ndarray of Flip Angles [deg].
         outpath: desired output path
     """
-    if 'dcm_template' in info:
+    if info['dcm_template']:
         # generate UIDs
         SeriesInstanceUID = pydicom.uid.generate_uid()
             
@@ -161,12 +161,12 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     image[image > maxval] = maxval
     image = image.astype(np.int16)
         
-    if 'nifti_template' in info:
+    if info['nifti_template']:
         affine = info['nifti_template']['affine']
         header = info['nifti_template']['header']
         nifti = nib.Nifti1Image(image, affine, header)
         
-    elif 'dcm_template' in info:
+    elif info['dcm_template']:
         # get voxel size
         dx, dy = np.array(info['dcm_template'][0].PixelSpacing).round(4)
         dz = round(float(info['dcm_template'][0].SliceThickness), 4)
