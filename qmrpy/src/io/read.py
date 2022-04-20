@@ -87,8 +87,7 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
         
         # get file path
         nifti_files = [os.path.normpath(file) for file in nifti_files]
-
-        file_path = nifti_files[0]
+        file_path = nifti_files
         
         # check for complex images
         try:        
@@ -141,8 +140,8 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             header = img[0].header
             
     else:
-        file_path = os.path.normpath(nifti_files) 
-        img = nib.load(file_path)
+        file_path = [os.path.normpath(nifti_files)]
+        img = nib.load(file_path[0])
         data = img.get_fdata()
         affine = img.affine
         header = img.header
@@ -151,20 +150,48 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     
     # get json
     try:
-        root = os.path.dirname(file_path)
-        json_path = os.path.normpath(str([path for path in pathlib.Path(root).glob('*.json')][0]))
-        with open(json_path) as json_file:
-            json_dict = json.loads(json_file.read())
+        root = os.path.dirname(file_path[0])
+        json_paths = [os.path.normpath(str(path)) for path in sorted(pathlib.Path(root).glob('*.json'))]
+        
+        print(file_path)
+        print(json_paths)
+        
+        # init fields
+        TI = []
+        TE = []
+        TR = []
+        FA = []
+        
+        # iterate over json files
+        for json_path in json_paths:
+            with open(json_path) as json_file:
+                json_dict = json.loads(json_file.read())
+                
+            # get parameters
+            if 'InversionTime' in json_dict:
+                TI.append(1e3 * json_dict['InversionTime'])
+            else:
+                TI.append(np.Inf)
+                
+            TE.append(1e3 * json_dict['EchoTime'])
+            TR.append(1e3 * json_dict['RepetitionTime'])
+            FA.append(json_dict['FlipAngle'])
             
-        # get parameters
-        if 'InversionTime' in json_dict:
-            TI = 1e3 * json_dict['InversionTime']
-        else:
-            TI = np.Inf
-            
-        TE = 1e3 * json_dict['EchoTime']
-        TR = 1e3 * json_dict['RepetitionTime']
-        FA = json_dict['FlipAngle']
+        # filter repeated entries
+        TI = np.unique(TI)
+        TE = np.unique(TE)
+        TR = np.unique(TR)
+        FA = np.unique(FA)
+        
+        # get scalars
+        if len(TI) == 1:
+            TI = TI[0]
+        if len(TE) == 1:
+            TE = TE[0]
+        if len(TR) == 1:
+            TR = TR[0]
+        if len(FA) == 1:
+            FA = FA[0]
                                 
         return data, {'nifti_template': {'affine': affine, 'header': header, 'json': json_dict}, 'dcm_template': {}, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
     

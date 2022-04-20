@@ -43,7 +43,7 @@ def longitudinal_relaxation(input_path, output_path='./output', output_label='lo
         input_path = [os.path.abspath(path) for path in input_path]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
-        folders = os.listdir(input_path)
+        folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
     click.echo("starting processing...")
@@ -97,7 +97,7 @@ def transverse_relaxation(input_path, output_path='./output', output_label='tran
         input_path = [os.path.abspath(path) for path in input_path]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
-        folders = os.listdir(input_path)
+        folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
     click.echo("starting processing...")
@@ -151,7 +151,7 @@ def transmit_field(input_path, output_path='./output', output_label='b1_field_ma
         input_path = [os.path.abspath(path) for path in input_path]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
-        folders = os.listdir(input_path)
+        folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
     click.echo("starting processing...")
@@ -210,7 +210,7 @@ def helmholtz_ept(input_path, output_path='./output', output_label='conductivity
         input_path = [os.path.abspath(path) for path in input_path]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
-        folders = os.listdir(input_path)
+        folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
             
     click.echo("starting processing...")

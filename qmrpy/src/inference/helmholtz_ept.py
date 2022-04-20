@@ -145,6 +145,20 @@ class HelmholtzConductivity:
                 
     #     return _optimize.address
     
+    # @staticmethod
+    # def get_patch_function(shape):
+        
+    #     if shape == 'cross':
+    #         pass
+        
+    #     if shape == 'cuboid':
+    #         @nb.njit(cache=True, fastmath=True)
+    #         def get_patch(patch_center, patch_width):
+                
+        
+    #     if shape == 'ellipsoid':
+    #         pass
+    
     @staticmethod
     def get_function_pointer():
         
@@ -165,7 +179,7 @@ class HelmholtzConductivity:
     
     @staticmethod
     @nb.njit(fastmath=True)
-    def fitting(output, input, grid, todo, optimize_ptr):
+    def fitting(output, input, grid, patches_centers, optimize_ptr):
         
         # general fitting options
         nvoxels, _, neqs = input.shape
@@ -173,7 +187,10 @@ class HelmholtzConductivity:
                                 
         # loop over voxels
         for n in nb.prange(nvoxels):
-            args = (grid, input[n], todo[n])  
+            
+            # get patch around voxel
+            patch_center = patches_centers[n]
+            args = (grid, input[n], patches_centers)  
             try:
                 fitparam = lmdif(optimize_ptr , initial_guess, args)
                 output[n] = fitparam[0]
@@ -196,10 +213,10 @@ class HelmholtzConductivity:
         width = kernel_width // 2
         
         # initialize output
-        tmp = np.zeros((nvoxels, 3, kernel_width), dtype=value.dtype)
+        # tmp = np.zeros((nvoxels, 3, kernel_width), dtype=value.dtype)
         
         # determine fitting points
-        weight = tmp.copy()
+        # weight = tmp.copy()
         
         # get indexes of fitting voxels
         i, j, k = np.argwhere(mask).transpose()
@@ -213,47 +230,50 @@ class HelmholtzConductivity:
         j += width
         k += width
         
-        # fill temporary matrix
-        for n in range(nvoxels):
-            tmp[n, 0] = value[i[n]-width:i[n]+width, j[n], k[n]]
-            tmp[n, 1] = value[i[n], j[n]-width:j[n]+width, k[n]]
-            tmp[n, 2] = value[i[n], j[n], k[n]-width:k[n]+width]
+        patches_centers = np.stack((k, j, i), axis=-1)
+        
+        # # fill temporary matrix
+        # for n in range(nvoxels):
+        #     tmp[n, 0] = value[i[n]-width:i[n]+width, j[n], k[n]]
+        #     tmp[n, 1] = value[i[n], j[n]-width:j[n]+width, k[n]]
+        #     tmp[n, 2] = value[i[n], j[n], k[n]-width:k[n]+width]
             
-            weight[n, 0] = input_mag[i[n]-width:i[n]+width, j[n], k[n]]
-            weight[n, 1] = input_mag[i[n], j[n]-width:j[n]+width, k[n]]
-            weight[n, 2] = input_mag[i[n], j[n], k[n]-width:k[n]+width]
+        #     weight[n, 0] = input_mag[i[n]-width:i[n]+width, j[n], k[n]]
+        #     weight[n, 1] = input_mag[i[n], j[n]-width:j[n]+width, k[n]]
+        #     weight[n, 2] = input_mag[i[n], j[n], k[n]-width:k[n]+width]
             
-        # determine voxels to be kept for fitting
-        todo = 100 * np.abs(weight - weight[..., [width]]) / weight[..., [width]]
-        todo = todo < fitting_threshold
+        # # determine voxels to be kept for fitting
+        # todo = 100 * np.abs(weight - weight[..., [width]]) / weight[..., [width]]
+        # todo = todo < fitting_threshold
          
-        # be sure there are points on both sides
-        ltodo = (todo[:, :, :width].sum(axis=-1) > 0).prod(axis=-1)
-        rtodo = (todo[:, :, width+1:].sum(axis=-1) > 0).prod(axis=-1)
-        keep = (ltodo * rtodo).astype(bool)
+        # # be sure there are points on both sides
+        # ltodo = (todo[:, :, :width].sum(axis=-1) > 0).prod(axis=-1)
+        # rtodo = (todo[:, :, width+1:].sum(axis=-1) > 0).prod(axis=-1)
+        # keep = (ltodo * rtodo).astype(bool)
         
-        # select voxels
-        todo = todo[keep]
-        tmp = tmp[keep]
-        weight = (weight - weight[..., [width]])[keep]
-        weight = todo * weight
+        # # select voxels
+        # todo = todo[keep]
+        # tmp = tmp[keep]
+        # weight = (weight - weight[..., [width]])[keep]
+        # weight = todo * weight
         
-        if gauss_sigma is not None and gauss_sigma > 0:
-            weight = np.exp(-weight**2/(2*gauss_sigma**2))
-        else:
-            weight = weight != 0
+        # if gauss_sigma is not None and gauss_sigma > 0:
+        #     weight = np.exp(-weight**2/(2*gauss_sigma**2))
+        # else:
+        #     weight = weight != 0
             
-        mask_out = np.zeros(mask.shape, mask.dtype)
-        mask_out[np.argwhere(mask)[keep][:, 0], np.argwhere(mask)[keep][:, 1], np.argwhere(mask)[keep][:, 2]] = True
+        # mask_out = np.zeros(mask.shape, mask.dtype)
+        # mask_out[np.argwhere(mask)[keep][:, 0], np.argwhere(mask)[keep][:, 1], np.argwhere(mask)[keep][:, 2]] = True
         
         # initialize grid
-        grid = [resolution[ax] * np.arange(-width, width) for ax in range(3)]
-        grid = np.stack(grid, axis=0)
+        axes = [resolution[ax] * np.arange(-width, width) for ax in range(3)]
+        yy, zz, xx = np.meshgrid(*axes, indexing='xy')
+        grid = np.stack((zz, np.flip(yy), xx), axis=-1)
                 
         # preallocate output
-        out = np.zeros((weight.shape[0], 3), grid.dtype)
+        out = np.zeros(nvoxels, grid.dtype)
         
-        return out.astype(np.float32), tmp.astype(np.float32), weight.astype(np.float32), mask_out, grid.astype(np.float32)
+        return out.astype(np.float32), patches_centers.astype(np.int32), grid.astype(np.float32)
     
     @staticmethod
     @nb.njit(parallel=True, fastmath=True)
