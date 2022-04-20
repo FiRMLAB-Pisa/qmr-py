@@ -86,7 +86,8 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     if isinstance(nifti_files, (list, tuple)):
         
         # get file path
-        nifti_files = [os.path.normpath(file) for file in nifti_files]
+        nifti_files = [os.path.normpath(file) for file in nifti_files 
+                       if file.endswith('.nii') or file.endswith('.nii.gz')]
         file_path = nifti_files
         
         # check for complex images
