@@ -363,9 +363,9 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, input_path, outpu
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
         img, info = io.read_data(input_path)
-        ti = inversion_times
+        ti = np.asarray(inversion_times, dtype=np.float64)
         fa = info['FA']
-        tr = tr_flash
+        tr = np.asarray(tr_flash, dtype=np.float64)
         B0 = info['B0']
         pbar.update(step)
                     
@@ -426,9 +426,9 @@ def flaws_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
         img, info = io.read_data(input_path)
-        ti = inversion_times
+        ti = np.asarray(inversion_times, dtype=np.float64)
         fa = info['FA']
-        tr = tr_flash
+        tr = np.asarray(tr_flash, dtype=np.float64)
         B0 = info['B0']
         pbar.update(step)
                     
