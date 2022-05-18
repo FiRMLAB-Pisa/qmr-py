@@ -352,6 +352,16 @@ def _get_echo_times(dsets):
     return echoTimes
 
 
+def _get_echo_numbers(dsets):
+    """
+    Return array of echo numbers for each dataset in dsets.
+    """
+    # get unique echo times
+    echoNumbers = np.array([int(dset.EchoNumbers) for dset in dsets])
+          
+    return echoNumbers
+
+
 def _get_repetition_times(dsets):
     """
     Return array of repetition times for each dataset in dsets.
@@ -451,6 +461,7 @@ def _get_dicom_template(dsets, index):
         dsets[n][0x0018, 0x0086].value = '1' # Echo Number
         dsets[n].InversionTime = '0'
         dsets[n].EchoTime = '0'
+        dsets[n].EchoNumbers = '1'
         dsets[n].EchoTrainLength = '1'
         dsets[n].RepetitionTime = '0'
         dsets[n].FlipAngle = '0'

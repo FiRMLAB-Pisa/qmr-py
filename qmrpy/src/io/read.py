@@ -154,11 +154,10 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
         root = os.path.dirname(file_path[0])
         json_paths = [os.path.normpath(str(path)) for path in sorted(pathlib.Path(root).glob('*.json'))]
         
-        print(file_path)
-        print(json_paths)
-        
         # init fields
+        B0 = []
         TI = []
+        EC = []
         TE = []
         TR = []
         FA = []
@@ -167,7 +166,9 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
         for json_path in json_paths:
             with open(json_path) as json_file:
                 json_dict = json.loads(json_file.read())
-                
+             
+            B0 = json_dict['MagneticFieldStrength']
+            
             # get parameters
             if 'InversionTime' in json_dict:
                 TI.append(1e3 * json_dict['InversionTime'])
@@ -175,18 +176,25 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
                 TI.append(np.Inf)
                 
             TE.append(1e3 * json_dict['EchoTime'])
+            EC.append(json_dict['EchoNumber'])
             TR.append(1e3 * json_dict['RepetitionTime'])
             FA.append(json_dict['FlipAngle'])
             
         # filter repeated entries
+        B0 = np.unique(B0)
         TI = np.unique(TI)
+        EC = np.unique(EC)
         TE = np.unique(TE)
         TR = np.unique(TR)
         FA = np.unique(FA)
         
         # get scalars
+        if len(B0) == 1:
+            B0 = B0[0]
         if len(TI) == 1:
             TI = TI[0]
+        if len(EC) == 1:
+            EC = EC[0]
         if len(TE) == 1:
             TE = TE[0]
         if len(TR) == 1:
@@ -194,10 +202,10 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
         if len(FA) == 1:
             FA = FA[0]
                                 
-        return data, {'nifti_template': {'affine': affine, 'header': header, 'json': json_dict}, 'dcm_template': {}, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
+        return data, {'nifti_template': {'affine': affine, 'header': header, 'json': json_dict}, 'dcm_template': {}, 'B0': B0, 'EC': EC, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
     
     except:
-        return data, {'nifti_template': {'affine': affine, 'header': header, 'json': {}}, 'dcm_template': {}, 'TI': None, 'TE': None, 'TR': None, 'FA': None}
+        return data, {'nifti_template': {'affine': affine, 'header': header, 'json': {}}, 'dcm_template': {}, 'B0': None, 'EC': None, 'TI': None, 'TE': None, 'TR': None, 'FA': None}
         
     
 def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
@@ -218,6 +226,9 @@ def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     """
     # load dicom
     image, dsets = utils._load_dcm(dicomdir)
+    
+    # get field strength
+    B0 = float(dsets[0].MagneticFieldStrength)
         
     # get slice locations
     uSliceLocs, firstSliceIdx, sliceIdx = utils._get_slice_locations(dsets)
@@ -228,6 +239,9 @@ def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     # get echo times
     echoTimes = utils._get_echo_times(dsets)
     
+    # get echo numbers
+    echoNumbers = utils._get_echo_numbers(dsets)
+    
     # get repetition times
     repetitionTimes = utils._get_repetition_times(dsets)
     
@@ -235,7 +249,7 @@ def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     flipAngles = utils._get_flip_angles(dsets)
     
     # get sequence matrix
-    contrasts = np.stack((inversionTimes, echoTimes, repetitionTimes, flipAngles), axis=1)
+    contrasts = np.stack((inversionTimes, echoTimes, echoNumbers, repetitionTimes, flipAngles), axis=1)
     
     # get unique contrast and indexes
     uContrasts, contrastIdx = utils._get_unique_contrasts(contrasts)
@@ -254,10 +268,10 @@ def read_dicom(dicomdir: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     dcm_template = utils._get_dicom_template(dsets, firstSliceIdx)
     
     # unpack sequence
-    TI, TE, TR, FA = uContrasts.transpose()
+    TI, TE, EC, TR, FA = uContrasts.transpose()
     
     # squeeze
     if sorted_image.shape[0] == 1:
         sorted_image = sorted_image[0]
         
-    return sorted_image, {'nifti_template': {}, 'dcm_template': dcm_template, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
+    return sorted_image, {'nifti_template': {}, 'dcm_template': dcm_template, 'B0': B0, 'EC': EC, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}

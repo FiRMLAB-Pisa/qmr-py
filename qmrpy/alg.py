@@ -15,7 +15,7 @@ import click
 import numpy as np
 
 
-from scipy.signal import medfilt
+# from scipy.signal import medfilt
 
 
 from tqdm import tqdm
@@ -25,10 +25,10 @@ from qmrpy import io, inference
 # from qmrpy.src.inference.helmholtz_ept import HelmholtzConductivity
 
 
-__all__ = ['longitudinal_relaxation', 'transverse_relaxation', 'transmit_field', 'helmholtz_ept']
+__all__ = ['longitudinal_relaxation', 'transverse_relaxation', 'transmit_field', 'helmholtz_ept', 'mp2rage_longitudinal_relaxation', 'flaws_longitudinal_relaxation']
 
 
-def longitudinal_relaxation(input_path, output_path='./output', output_label='longitudinal_relaxation_map', save_dicom=False, save_nifti=False, mask_threshold=0.05):
+def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
     """
     Reconstruct quantitative T1 maps from Inversion Recovery Spin-Echo data.
     
@@ -41,10 +41,19 @@ def longitudinal_relaxation(input_path, output_path='./output', output_label='lo
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.abspath(os.path.join(output_path, rootdir))
             
     click.echo("starting processing...")
     t_start = time()
@@ -70,10 +79,10 @@ def longitudinal_relaxation(input_path, output_path='./output', output_label='lo
         
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(longitudinal_relaxation_map, info, output_label, output_path)        
+            io.write_dicom(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(longitudinal_relaxation_map, info, output_label, output_path)
+            io.write_nifti(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')
         pbar.update(step)
         
     t_end = time()
@@ -82,7 +91,7 @@ def longitudinal_relaxation(input_path, output_path='./output', output_label='lo
     return longitudinal_relaxation_map
 
     
-def transverse_relaxation(input_path, output_path='./output', output_label='transverse_relaxation_map', save_dicom=False, save_nifti=False, mask_threshold=0.05):
+def transverse_relaxation(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
     """
     Reconstruct quantitative T2 / T2* maps from Multi-Echo Spin-Echo / Gradient Echo data.
     
@@ -95,10 +104,19 @@ def transverse_relaxation(input_path, output_path='./output', output_label='tran
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.abspath(os.path.join(output_path, rootdir))
             
     click.echo("starting processing...")
     t_start = time()
@@ -124,10 +142,10 @@ def transverse_relaxation(input_path, output_path='./output', output_label='tran
         
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(transverse_relaxation_map, info, output_label, output_path)         
+            io.write_dicom(transverse_relaxation_map, info, output_label + '_qt2', output_path + '_qt2')         
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(transverse_relaxation_map, info, output_label, output_path)
+            io.write_nifti(transverse_relaxation_map, info, output_label + '_qt2', output_path + '_qt2')
         pbar.update(step)
         
     t_end = time()
@@ -136,7 +154,7 @@ def transverse_relaxation(input_path, output_path='./output', output_label='tran
     return transverse_relaxation_map
     
 
-def transmit_field(input_path, output_path='./output', output_label='b1_field_map', save_dicom=False, save_nifti=False, mask_threshold=0.05):
+def transmit_field(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
     """
     Reconstruct quantitative B1+ maps from Double Angle Spin-Echo / Gradient Echo data.
     
@@ -149,10 +167,19 @@ def transmit_field(input_path, output_path='./output', output_label='b1_field_ma
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.abspath(os.path.join(output_path, rootdir))
             
     click.echo("starting processing...")
     t_start = time()
@@ -178,10 +205,10 @@ def transmit_field(input_path, output_path='./output', output_label='b1_field_ma
         
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(transmit_field_map, info, output_label, output_path)          
+            io.write_dicom(transmit_field_map, info, output_label + '_qb1', output_path + '_qb1')          
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(transmit_field_map, info, output_label, output_path)
+            io.write_nifti(transmit_field_map, info, output_label + '_qb1', output_path + '_qb1')
         pbar.update(step)
         
     t_end = time()
@@ -190,7 +217,7 @@ def transmit_field(input_path, output_path='./output', output_label='b1_field_ma
     return transmit_field_map
     
 
-def helmholtz_ept(input_path, output_path='./output', output_label='conductivity_map', 
+def helmholtz_ept(input_path, output_path='./output', 
                   save_dicom=False, save_nifti=False, 
                   mask_path=None, mask_threshold=0.05, 
                   gaussian_kernel_sigma=0.0, gaussian_weight_sigma=0.0, 
@@ -208,10 +235,19 @@ def helmholtz_ept(input_path, output_path='./output', output_label='conductivity
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.join(input_path, folder) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.abspath(os.path.join(output_path, rootdir))
             
     click.echo("starting processing...")
     t_start = time()
@@ -284,10 +320,10 @@ def helmholtz_ept(input_path, output_path='./output', output_label='conductivity
         
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(conductivity_map, info, output_label, output_path)        
+            io.write_dicom(conductivity_map, info, output_label + '_sigma', output_path + '_sigma')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(conductivity_map, info, output_label, output_path)
+            io.write_nifti(conductivity_map, info, output_label + '_sigma', output_path + '_sigma')
             
         pbar.update(step)
         
@@ -295,6 +331,156 @@ def helmholtz_ept(input_path, output_path='./output', output_label='conductivity
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
     return conductivity_map
+
+
+def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path='./output', save_dicom=False, save_nifti=False):
+    """
+    Reconstruct quantitative T1 maps from MP2RAGEDATA data.
+    """
+    # check input
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]
+        
+    elif input_path.endswith('/') or input_path.endswith('\\'):
+        folders = sorted(os.listdir(input_path))
+        input_path = [os.path.join(input_path, folder) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+            
+    click.echo("starting processing...")
+    t_start = time()
+    
+    # progress bar step size
+    step = 1
+    
+    with tqdm(total=3) as pbar:
+        pbar.set_description("loading input data...")
+        img, info = io.read_data(input_path)
+        ti = inversion_times
+        fa = info['FA']
+        tr = tr_flash
+        B0 = info['B0']
+        pbar.update(step)
+                    
+        pbar.set_description("computing longitudinal relaxation map...")
+        longitudinal_relaxation_map, uni_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0)
+        pbar.update(step)
+        
+        # export unified image
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(uni_img, info, rootdir + '_uni', output_path + '_uni')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(uni_img, info, rootdir + '_uni', output_path + '_uni')
+        
+        # export t1map
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')
+        pbar.update(step)
+        
+    t_end = time()
+    click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
+    
+    return longitudinal_relaxation_map, uni_img
+
+
+def flaws_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path='./output', save_dicom=False, save_nifti=False):
+    """
+    Reconstruct quantitative T1 maps from FLAWS data.
+    """
+    # check input
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]
+        
+    elif input_path.endswith('/') or input_path.endswith('\\'):
+        folders = sorted(os.listdir(input_path))
+        input_path = [os.path.join(input_path, folder) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+            
+    click.echo("starting processing...")
+    t_start = time()
+    
+    # progress bar step size
+    step = 1
+    
+    with tqdm(total=3) as pbar:
+        pbar.set_description("loading input data...")
+        img, info = io.read_data(input_path)
+        ti = inversion_times
+        fa = info['FA']
+        tr = tr_flash
+        B0 = info['B0']
+        pbar.update(step)
+                    
+        pbar.set_description("computing longitudinal relaxation map...")
+        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0, sequence='flaws', t1strategy='hc')
+        pbar.update(step)
+        
+        # export unified image
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(uni_img, info, rootdir + '_uni', output_path + '_uni')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(uni_img, info, rootdir + '_uni', output_path + '_uni')
+            
+        # export minimum image
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(min_img, info, rootdir + '_min', output_path + '_min')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(min_img, info, rootdir + '_min', output_path + '_min')
+            
+        # export hc image
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(hc_img, info, rootdir + '_hc', output_path + '_hc')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(hc_img, info, rootdir + '_hc', output_path + '_hc')
+            
+        # export hco image
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(hco_img, info, rootdir + '_hco', output_path + '_hco')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(hco_img, info, rootdir + '_hco', output_path + '_hco')
+        
+        # export t1map
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')
+        pbar.update(step)
+        
+    t_end = time()
+    click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
+    
+    return longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img
 
 
 

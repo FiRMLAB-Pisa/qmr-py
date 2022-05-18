@@ -26,14 +26,27 @@ __all__ = ['write_dicom', 'write_nifti']
 
 
 
+def write_to_numpy(image: np.ndarray, info: Dict, outpath: str = './output'):
+    """
+    Write parametric map to npz.
+    
+    Args:
+        image: ndarray of image data to be written.
+        info: dict with the following fields:
+            - template: the DICOM template.
+            - slice_locations: ndarray of Slice Locations [mm].
+            - TI: ndarray of Inversion Times [ms].
+            - TE: ndarray of Echo Times [ms].
+            - TR: ndarray of Repetition Times [ms].
+            - FA: ndarray of Flip Angles [deg].
+        outpath: desired output path
+    """
+    
 def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath: str = './output'):
     """
     Write parametric map to dicom.
     
-    Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
+    Args:        
         image: ndarray of image data to be written.
         info: dict with the following fields:
             - template: the DICOM template.
@@ -126,9 +139,6 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     Write parametric map to dicom.
     
     Args:
-        dicomdir: string or list of strings with DICOM folders path.
-        
-    Returns:
         image: ndarray of image data to be written.
         info: dict with the following fields:
             - template: the DICOM template.

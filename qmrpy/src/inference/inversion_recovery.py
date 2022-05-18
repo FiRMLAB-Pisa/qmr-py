@@ -76,8 +76,8 @@ class InversionRecoveryT1Mapping:
     """        
     @staticmethod
     @nb.njit(cache=True, fastmath=True)
-    def signal_model(ti, A, B, T1):
-        return np.abs(B + A * np.exp(-ti / T1))
+    def signal_model(ti, C, T1):
+        return np.abs(C * (1 - 2 * np.exp(-ti / T1) + np.exp(-5000.0 / T1)))
     
     @staticmethod
     def get_function_pointer(nti):
@@ -89,8 +89,8 @@ class InversionRecoveryT1Mapping:
         def _optimize(params_, res, args_):
             
             # get parameters
-            params = nb.carray(params_, (3,))
-            A, B, T1  = params
+            params = nb.carray(params_, (2,))
+            C, T1  = params
             
             # get variables
             args = nb.carray(args_, (2 * nti,))
@@ -99,7 +99,7 @@ class InversionRecoveryT1Mapping:
             
             # compute residual
             for i in range(nti):
-                res[i] = func(x[i], A, B, T1) - y[i] 
+                res[i] = func(x[i], C, T1) - y[i] 
                 
         return _optimize.address
     
@@ -127,7 +127,7 @@ class InversionRecoveryT1Mapping:
         
         # general fitting options
         nvoxels, neqs = input.shape
-        initial_guess = np.array([-2.0, 1.0, 1000.0], input.dtype) # A, B, T1
+        initial_guess = np.array([10.0, 1000.0], input.dtype) # C, D, T1
         
         # loop over voxels
         for n in nb.prange(nvoxels):   
