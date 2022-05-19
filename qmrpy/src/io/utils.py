@@ -422,7 +422,6 @@ def _get_dicom_template(dsets, index):
         dset.SeriesNumber = SeriesNumber
         dset.SeriesInstanceUID = None
     
-        dset.SOPInstanceUID = None
         dset.InstanceNumber = None
         
         try:
