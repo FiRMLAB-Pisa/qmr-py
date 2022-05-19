@@ -118,15 +118,16 @@ cli.add_command(helmholtz_ept)
 @click.command()
 @click.option( '--inversion-times', '-ti', multiple=True, required=True, help='MP2RAGE inversion times for the two volumes in [ms]')
 @click.option( '--tr-flash', '-tr', multiple=True, required=True, help='FLASH readouts repetition time(s) [ms]')
+@click.option( '--flip-angles', '-fa', multiple=True, required=True, help='FLASH readouts flip angle(s) [deg]')
 @click.option( '--input-path', required=True, help='location on disk of MP2RAGE data series in DICOM format')
 @click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
 @click.option( '--save-dicom', default=True, show_default=True, help='save reconstructed map as DICOM')
 @click.option( '--save-nifti', default=True, show_default=True, help='save reconstructed map as NiFTI')
-def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path, save_dicom, save_nifti):
+def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path, save_dicom, save_nifti):
     """
     Reconstruct quantitative T1 maps from MP2RAGEDATA data.
     """
-    alg.mp2rage_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path, save_dicom, save_nifti)
+    alg.mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path, save_dicom, save_nifti)
 
     
 # wrap into command line
@@ -136,15 +137,16 @@ cli.add_command(mp2rage_longitudinal_relaxation)
 @click.command()
 @click.option( '--inversion-times', '-ti', multiple=True, required=True, help='FLAWS inversion times for the two volumes in [ms]')
 @click.option( '--tr-flash', '-tr', multiple=True, required=True, help='FLASH readouts repetition time(s) [ms]')
+@click.option( '--flip-angles', '-fa', multiple=True, required=True, help='FLASH readouts flip angle(s) [deg]')
 @click.option( '--input-path', required=True, help='location on disk of FLAWS data series in DICOM format')
 @click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
 @click.option( '--save-dicom', default=True, show_default=True, help='save reconstructed map as DICOM')
 @click.option( '--save-nifti', default=True, show_default=True, help='save reconstructed map as NiFTI')
-def flaws_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path, save_dicom, save_nifti):
+def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path, save_dicom, save_nifti):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
-    alg.flaws_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path, save_dicom, save_nifti)
+    alg.flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_path, output_path, save_dicom, save_nifti)
 
     
 # wrap into command line

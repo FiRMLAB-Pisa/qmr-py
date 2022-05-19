@@ -333,7 +333,7 @@ def helmholtz_ept(input_path, output_path='./output',
     return conductivity_map
 
 
-def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path='./output', save_dicom=False, save_nifti=False):
+def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path='./output', save_dicom=False, save_nifti=False):
     """
     Reconstruct quantitative T1 maps from MP2RAGEDATA data.
     """
@@ -364,7 +364,7 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, input_path, outpu
         pbar.set_description("loading input data...")
         img, info = io.read_data(input_path)
         ti = np.asarray(inversion_times, dtype=np.float64)
-        fa = info['FA']
+        fa = np.asarray(flip_angles, dtype=np.float64)
         tr = np.asarray(tr_flash, dtype=np.float64)
         B0 = info['B0']
         pbar.update(step)
@@ -396,7 +396,7 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, input_path, outpu
     return longitudinal_relaxation_map, uni_img
 
 
-def flaws_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_path='./output', save_dicom=False, save_nifti=False):
+def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path='./output', save_dicom=False, save_nifti=False):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
@@ -427,7 +427,7 @@ def flaws_longitudinal_relaxation(inversion_times, tr_flash, input_path, output_
         pbar.set_description("loading input data...")
         img, info = io.read_data(input_path)
         ti = np.asarray(inversion_times, dtype=np.float64)
-        fa = info['FA']
+        fa = np.asarray(flip_angles, dtype=np.float64)
         tr = np.asarray(tr_flash, dtype=np.float64)
         B0 = info['B0']
         pbar.update(step)
