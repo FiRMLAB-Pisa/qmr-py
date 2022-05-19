@@ -6,6 +6,7 @@ Created on Thu Feb 10 16:16:41 2022
 
 @author: Matteo Cencini
 """
+import copy
 import multiprocessing
 from multiprocessing.dummy import Pool as ThreadPool
 import os
@@ -67,10 +68,10 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         ninstances = image.shape[0]
         
         # init dsets
-        dsets = info['dcm_template']
+        dsets = copy.deepcopy(info['dcm_template'])
         
         # generate series number
-        series_number = series_number_scale * int(dsets[0].SeriesNumber) + series_number_offset
+        series_number = str(series_number_scale * int(dsets[0].SeriesNumber) + series_number_offset)
         
         # cast image
         minval = np.iinfo(np.int16).min
@@ -93,7 +94,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
             dsets[n].WindowCenter = str(0.5 * windowWidth)
     
             dsets[n].SeriesDescription = series_description
-            dsets[n].SeriesNumber = str(series_number)
+            dsets[n].SeriesNumber = series_number
             dsets[n].SeriesInstanceUID = SeriesInstanceUID
         
             # dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
