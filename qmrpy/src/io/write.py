@@ -41,8 +41,10 @@ def write_to_numpy(image: np.ndarray, info: Dict, outpath: str = './output'):
             - FA: ndarray of Flip Angles [deg].
         outpath: desired output path
     """
+    pass
+
     
-def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath: str = './output'):
+def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath: str = './output', series_number_scale=1000, series_number_offset=0):
     """
     Write parametric map to dicom.
     
@@ -60,12 +62,15 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
     if info['dcm_template']:
         # generate UIDs
         SeriesInstanceUID = pydicom.uid.generate_uid()
-            
+                    
         # count number of instances
         ninstances = image.shape[0]
         
         # init dsets
         dsets = info['dcm_template']
+        
+        # generate series number
+        series_number = series_number_scale * int(dsets[0].SeriesNumber) + series_number_offset
         
         # cast image
         minval = np.iinfo(np.int16).min
@@ -88,7 +93,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
             dsets[n].WindowCenter = str(0.5 * windowWidth)
     
             dsets[n].SeriesDescription = series_description
-            dsets[n].SeriesNumber = str(int(dsets[n].SeriesNumber) * 1000)
+            dsets[n].SeriesNumber = str(series_number)
             dsets[n].SeriesInstanceUID = SeriesInstanceUID
         
             # dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
