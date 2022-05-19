@@ -15,7 +15,7 @@ import numpy as np
 __all__ = ['mp2rage_t1_fitting']
 
 
-def mp2rage_t1_fitting(input, ti, fa, tr_flash, B0, beta=0, inversion_efficiency=0.96, sequence='mp2rage', t1strategy='uni'):
+def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversion_efficiency=0.96, sequence='mp2rage'):
     """
     Calculate t2/t2* maps from multiecho spin echo / gradient echo data.
     
@@ -43,10 +43,10 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, B0, beta=0, inversion_efficiency
     
     # get unified image
     uni_img = -MP2RAGE.uni_image(input[0], input[1], beta)
-    
+        
     # get additional images
     if sequence == 'mp2rage':
-        t1map = MP2RAGE.fit_t1(uni_img, ti, fa, tr_flash, nslices, B0, inversion_efficiency)
+        t1map = MP2RAGE.fit_t1(uni_img, ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy='uni')
         return t1map, uni_img
     
     elif sequence == 'flaws':
@@ -55,10 +55,7 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, B0, beta=0, inversion_efficiency
         _, hco_img = MP2RAGE().hco_image(input[0], input[1], uni_img)
         
         # actual t1 fit
-        if t1strategy == 'uni':
-            t1map = MP2RAGE.fit_t1(-uni_img, ti, fa, tr_flash, nslices, B0, inversion_efficiency)
-        elif t1strategy == 'hc':
-            t1map = MP2RAGE.fit_t1(-uni_img, ti, fa, tr_flash, nslices, B0, inversion_efficiency, strategy='hc')
+        t1map = MP2RAGE.fit_t1(hc_img, ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy='hc')
             
         return t1map, uni_img, min_img, hc_img, hco_img
 
@@ -183,14 +180,11 @@ class MP2RAGE:
         return hco_image, None
     
     @staticmethod
-    def fit_t1(image, ti, fa, tr_flash, nslices, B0, inversion_efficiency=0.96, strategy='uni'):
+    def fit_t1(image, ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency=0.96, strategy='uni'):
 
         # get lookup table
-        intensity, t1_grid = MP2RAGE.lookup_table(ti, fa, tr_flash, nslices, B0, inversion_efficiency, strategy)
+        intensity, t1_grid = MP2RAGE.lookup_table(ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy)
         
-        # t1_grid = np.append(t1_grid, t1_grid[-1] + (t1_grid[-1] - t1_grid[-2]))
-        # intensity = np.append(intensity, -0.5)
-
         t1_grid = t1_grid[np.argsort(t1_grid)]
         intensity = np.sort(intensity)
 
@@ -206,10 +200,13 @@ class MP2RAGE:
         return t1map
     
     @staticmethod
-    def signal_model(ti, fa, tr_flash, nslices, T1s, B0, inversion_efficiency):
+    def signal_model(ti, fa, tr_flash, tr_mp2rage, nslices, T1s, B0, inversion_efficiency):
     
         # handle input parameters
         ti = np.atleast_1d(ti) * 1e-3 # [ms] -> s
+        tr_mp2rage *= 1e-3 # [ms] -> [s]
+        tr_flash *= 1e-3 # [ms] -> [s]
+
    
         # flip angle
         fa = np.atleast_1d(fa)    
@@ -218,11 +215,7 @@ class MP2RAGE:
         if len(fa) != 2:
             fa = np.repeat(fa, 2)
         
-        # FLASH TR
-        tr_flash = np.atleast_1d(tr_flash) * 1e-3 # [ms] -> [s]
-        if len(tr_flash) != 2:
-            tr_flash = np.repeat(tr_flash, 2)
-        
+        # number of slices        
         nslices = np.atleast_1d(nslices)
     
         if len(nslices) == 2:
@@ -235,13 +228,14 @@ class MP2RAGE:
             nZ_aft = nslices / 2
     
         # calculate operators
-        E_1 = np.exp(-tr_flash[:, None] / T1s[None, :])
+        E_1 = np.exp(-tr_flash / T1s)
         TA_bef = nZ_bef * tr_flash
         TA_aft = nZ_aft * tr_flash
 
-        TD = np.zeros(2)
-        TD[0] = ti[0] - TA_bef[0]        
-        TD[1] = ti[1] - ti[0] - (TA_aft[0] + TA_bef[1])
+        TD = np.zeros(3)
+        TD[0] = ti[0] - TA_bef      
+        TD[1] = ti[1] - ti[0] - (TA_aft + TA_bef)
+        TD[2] = tr_mp2rage - ti[1] - TA_aft
 
         E_TD = np.exp(-TD[:, None] / T1s[None, :])
 
@@ -251,8 +245,10 @@ class MP2RAGE:
         MZsteadystate = 1. / (1 + inversion_efficiency * (np.prod(cosalfaE1, axis=0))**(nslices) * np.prod(E_TD, axis=0))
         
         MZsteadystatenumerator = (1 - E_TD[0])
-        MZsteadystatenumerator = MZsteadystatenumerator * cosalfaE1[0]**nslices + (1 - E_1[0]) * (1 - (cosalfaE1[0])**nslices) / (1 - cosalfaE1[0])        
+        MZsteadystatenumerator *= cosalfaE1[0]**nslices + (1 - E_1) * (1 - (cosalfaE1[0])**nslices) / (1 - cosalfaE1[0])        
         MZsteadystatenumerator = MZsteadystatenumerator * E_TD[1] + (1 - E_TD[1])
+        MZsteadystatenumerator *= cosalfaE1[1]**nslices + (1 - E_1) * (1 - (cosalfaE1[1])**nslices) / (1 - cosalfaE1[1])        
+        MZsteadystatenumerator = MZsteadystatenumerator * E_TD[2] + (1 - E_TD[2])
     
         MZsteadystate = MZsteadystate * MZsteadystatenumerator
         
@@ -260,33 +256,35 @@ class MP2RAGE:
         signal = np.zeros((2, len(T1s)), dtype=np.float32)
     
         # signal for first volume
-        temp = (-inversion_efficiency * MZsteadystate * E_TD[0] + (1-E_TD[0])) * (cosalfaE1[0])**(nZ_bef) + (1 - E_1[0]) * (1 - (cosalfaE1[0])**(nZ_bef)) / (1 - (cosalfaE1[0]))
+        temp = (-inversion_efficiency * MZsteadystate * E_TD[0] + (1-E_TD[0])) * (cosalfaE1[0])**(nZ_bef) + (1 - E_1) * (1 - (cosalfaE1[0])**(nZ_bef)) / (1 - (cosalfaE1[0]))
         signal[0] = sinalfa[0] * temp
     
         # signal for second volume
-        temp = temp * (cosalfaE1[1])**(nZ_aft) + (1 - E_1[1]) * (1 - (cosalfaE1[1])**(nZ_aft))  / (1 - (cosalfaE1[1]))
-        temp = (temp * E_TD[1] + (1 - E_TD[1])) * (cosalfaE1[1])**(nZ_bef) + (1 - E_1[1]) * (1 - (cosalfaE1[1])**(nZ_bef)) / (1 - (cosalfaE1[1]))
+        temp *= (cosalfaE1[1])**(nZ_aft) + (1 - E_1[1]) * (1 - (cosalfaE1[1])**(nZ_aft))  / (1 - (cosalfaE1[1]))
+        temp = (temp * E_TD[1] + (1 - E_TD[1])) * (cosalfaE1[1])**(nZ_bef) + (1 - E_1) * (1 - (cosalfaE1[1])**(nZ_bef)) / (1 - (cosalfaE1[1]))
         signal[1] = sinalfa[1] * temp
     
         return signal        
 
     @staticmethod
-    def lookup_table(ti, fa, tr_flash, nslices, B0, inversion_efficiency, input):
+    def lookup_table(ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy):
     
         # get parameters search grid
         t1_grid = np.arange(0.05, 5.05, 0.05)
-        signal = MP2RAGE.signal_model(ti, fa, tr_flash, nslices, t1_grid, B0, inversion_efficiency)
+        signal = MP2RAGE.signal_model(ti, fa, tr_flash, tr_mp2rage, nslices, t1_grid, B0, inversion_efficiency)
             
         # get unified signal
         intensity = (signal[0] * signal[1].conj()).real / (np.abs(signal[0]**2) + np.abs(signal[1]**2))
-        if input == 'hc':
-            _, intensity = MP2RAGE.hc_image(signal[0], signal[1], intensity)
+        if strategy == 'hc':
+            uni_signal = intensity
+            _, hc_signal = MP2RAGE.hc_image(signal[0], signal[1], uni_signal)
+        
+        else:
+            # get monotonic part
+            minindex = np.argmax(np.abs(hc_signal))
+            maxindex = np.argmin(np.abs(hc_signal))
+                    
+            hc_signal = hc_signal[minindex:maxindex+1]
+            t1_grid = t1_grid[minindex:maxindex+1]
     
-        # get monotonic part
-        minindex = np.argmax(np.abs(intensity))
-        maxindex = np.argmin(np.abs(intensity))
-                
-        intensity = intensity[minindex:maxindex+1]
-        t1_grid = t1_grid[minindex:maxindex+1]
-    
-        return intensity, t1_grid
+        return hc_signal, t1_grid

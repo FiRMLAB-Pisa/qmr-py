@@ -428,12 +428,13 @@ def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_
         img, info = io.read_data(input_path)
         ti = np.asarray(inversion_times, dtype=np.float64)
         fa = np.asarray(flip_angles, dtype=np.float64)
-        tr = np.asarray(tr_flash, dtype=np.float64)
+        tr_flash = np.asarray(tr_flash, dtype=np.float64)
+        tr = info['TR'][0]
         B0 = info['B0']
         pbar.update(step)
                     
         pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0, sequence='flaws')
+        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr_flash, tr, B0, sequence='flaws')
         pbar.update(step)
         
         # export wm suppressed image
@@ -455,34 +456,34 @@ def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_
         # export unified image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(uni_img, info, rootdir + '_uni', output_path + '_uni')        
+            io.write_dicom(1000 * uni_img, info, rootdir + '_uni', output_path + '_uni')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(uni_img, info, rootdir + '_uni', output_path + '_uni')
+            io.write_nifti(1000 * uni_img, info, rootdir + '_uni', output_path + '_uni')
             
         # export minimum image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(min_img, info, rootdir + '_min', output_path + '_min')        
+            io.write_dicom(1000 * min_img, info, rootdir + '_min', output_path + '_min')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(min_img, info, rootdir + '_min', output_path + '_min')
+            io.write_nifti(1000 * min_img, info, rootdir + '_min', output_path + '_min')
             
         # export hc image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(hc_img, info, rootdir + '_hc', output_path + '_hc')        
+            io.write_dicom(1000 * hc_img, info, rootdir + '_hc', output_path + '_hc')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(hc_img, info, rootdir + '_hc', output_path + '_hc')
+            io.write_nifti(1000 * hc_img, info, rootdir + '_hc', output_path + '_hc')
             
         # export hco image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(hco_img, info, rootdir + '_hco', output_path + '_hco')        
+            io.write_dicom(1000 * hco_img, info, rootdir + '_hco', output_path + '_hco')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(hco_img, info, rootdir + '_hco', output_path + '_hco')
+            io.write_nifti(1000 * hco_img, info, rootdir + '_hco', output_path + '_hco')
         
         # export t1map
         if save_dicom:
