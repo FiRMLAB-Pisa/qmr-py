@@ -396,7 +396,7 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, inpu
     return longitudinal_relaxation_map, uni_img
 
 
-def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path='./output', save_dicom=False, save_nifti=False):
+def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_path, output_path='./output', save_dicom=False, save_nifti=False):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """

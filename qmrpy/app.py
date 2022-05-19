@@ -142,7 +142,7 @@ cli.add_command(mp2rage_longitudinal_relaxation)
 @click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
 @click.option( '--save-dicom', default=True, show_default=True, help='save reconstructed map as DICOM')
 @click.option( '--save-nifti', default=True, show_default=True, help='save reconstructed map as NiFTI')
-def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path, save_dicom, save_nifti):
+def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash , input_path, output_path, save_dicom, save_nifti):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
