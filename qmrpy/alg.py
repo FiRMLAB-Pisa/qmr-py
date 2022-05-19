@@ -433,7 +433,7 @@ def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_
         pbar.update(step)
                     
         pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0, sequence='flaws', t1strategy='hc')
+        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0, sequence='flaws')
         pbar.update(step)
         
         # export wm suppressed image
@@ -496,7 +496,7 @@ def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img
+    return longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img, img
 
 
 

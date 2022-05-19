@@ -42,7 +42,7 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, B0, beta=0, inversion_efficiency
     nslices = input.shape[0]
     
     # get unified image
-    uni_img = MP2RAGE.uni_image(input[0], input[1], beta)
+    uni_img = -MP2RAGE.uni_image(input[0], input[1], beta)
     
     # get additional images
     if sequence == 'mp2rage':
@@ -56,9 +56,9 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, B0, beta=0, inversion_efficiency
         
         # actual t1 fit
         if t1strategy == 'uni':
-            t1map = MP2RAGE.fit_t1(uni_img, ti, fa, tr_flash, nslices, B0, inversion_efficiency)
+            t1map = MP2RAGE.fit_t1(-uni_img, ti, fa, tr_flash, nslices, B0, inversion_efficiency)
         elif t1strategy == 'hc':
-            t1map = MP2RAGE.fit_t1(hc_img, ti, fa, tr_flash, nslices, B0, inversion_efficiency, strategy='hc')
+            t1map = MP2RAGE.fit_t1(-uni_img, ti, fa, tr_flash, nslices, B0, inversion_efficiency, strategy='hc')
             
         return t1map, uni_img, min_img, hc_img, hco_img
 
@@ -80,7 +80,7 @@ class MP2RAGE:
         Returns:
             uni_image: unified image (T1w for standard MP2RAGE).
         """
-        return ((inv1_img.conj() * inv2_img).real - beta) / ((np.abs(inv1_img**2) + np.abs(inv2_img**2)) + 2 * beta)
+        return ((inv1_img.conj() * inv2_img).real - beta) / ((np.abs(inv1_img)**2 + np.abs(inv2_img)**2) + 2 * beta)
 
     @staticmethod
     def min_image(inv1_img: np.ndarray, inv2_img: np.ndarray, uni_image: np.ndarray = None):
@@ -236,7 +236,6 @@ class MP2RAGE:
     
         # calculate operators
         E_1 = np.exp(-tr_flash[:, None] / T1s[None, :])
-        TA = nslices * tr_flash
         TA_bef = nZ_bef * tr_flash
         TA_aft = nZ_aft * tr_flash
 
@@ -247,7 +246,6 @@ class MP2RAGE:
         E_TD = np.exp(-TD[:, None] / T1s[None, :])
 
         cosalfaE1 = np.cos(fa)[:, None] * E_1    
-        oneminusE1 = 1 - E_1
         sinalfa = np.sin(fa)[:, None]
     
         MZsteadystate = 1. / (1 + inversion_efficiency * (np.prod(cosalfaE1, axis=0))**(nslices) * np.prod(E_TD, axis=0))
