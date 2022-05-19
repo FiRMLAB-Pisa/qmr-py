@@ -436,6 +436,22 @@ def flaws_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_
         longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0, sequence='flaws', t1strategy='hc')
         pbar.update(step)
         
+        # export wm suppressed image
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(np.abs(img[0]), info, rootdir + '_wms', output_path + '_wms')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(np.abs(img[0]), info, rootdir + '_wms', output_path + '_wms')
+            
+        # export csf suppressed image
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(np.abs(img[1]), info, rootdir + '_csfs', output_path + '_csfs')        
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(np.abs(img[1]), info, rootdir + '_csfs', output_path + '_csfs')
+        
         # export unified image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
