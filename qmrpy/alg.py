@@ -440,7 +440,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         # export wm suppressed image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(np.abs(img[0]), info, rootdir + '_wms', output_path + '_wms', series_number_offset=100)        
+            io.write_dicom(np.abs(img[0]), info, 'FLAWS White Matter Suppressed', output_path + '_wms', series_number_offset=100)        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(np.abs(img[0]), info, rootdir + '_wms', output_path + '_wms')
@@ -448,7 +448,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         # export csf suppressed image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(np.abs(img[1]), info, rootdir + '_csfs', output_path + '_csfs', series_number_offset=200)        
+            io.write_dicom(np.abs(img[1]), info, 'FLAWS CSF Suppressed', output_path + '_csfs', series_number_offset=200)        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(np.abs(img[1]), info, rootdir + '_csfs', output_path + '_csfs')
@@ -456,7 +456,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         # export unified image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(1000 * uni_img, info, rootdir + '_uni', output_path + '_uni', series_number_offset=500)        
+            io.write_dicom(1000 * uni_img, info, 'FLAWS Unified T1w', output_path + '_uni', series_number_offset=500)        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * uni_img, info, rootdir + '_uni', output_path + '_uni')
@@ -464,7 +464,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         # export minimum image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(1000 * min_img, info, rootdir + '_min', output_path + '_min', series_number_offset=600)        
+            io.write_dicom(1000 * min_img, info, 'FLAWS Minimum Image', output_path + '_min', series_number_offset=600)        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * min_img, info, rootdir + '_min', output_path + '_min')
@@ -472,7 +472,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         # export hc image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(1000 * hc_img, info, rootdir + '_hc', output_path + '_hc', series_number_offset=300)        
+            io.write_dicom(1000 * hc_img, info, 'FLAWS High-Contrast Image', output_path + '_hc', series_number_offset=300)        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * hc_img, info, rootdir + '_hc', output_path + '_hc')
@@ -480,7 +480,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         # export hco image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(1000 * hco_img, info, rootdir + '_hco', output_path + '_hco', series_number_offset=400)        
+            io.write_dicom(1000 * hco_img, info, 'FLAWS T1w-MP2RAGE-like image', output_path + '_hco', series_number_offset=400)        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * hco_img, info, rootdir + '_hco', output_path + '_hco')
@@ -488,7 +488,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         # export t1map
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1', series_number_offset=10)        
+            io.write_dicom(longitudinal_relaxation_map, info, 'FLAWS T1 map [ms]', output_path + '_qt1', series_number_offset=10)        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')
