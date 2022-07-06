@@ -10,8 +10,7 @@ import numpy as np
 import numba as nb
 
 
-from NumbaMinpack import minpack_sig, lmdif
-# from qmrpy.src.inference.LM import lmdif
+from qmrpy.src.inference.LM import lmdif
 
 
 __all__ = ['ir_se_t1_fitting']
@@ -54,8 +53,7 @@ def ir_se_t1_fitting(input: np.ndarray, ti: float, mask: np.ndarray = None) -> n
     output = np.zeros(ishape[1:], input.dtype)
             
     # do actual fit
-    pointer = InversionRecoveryT1Mapping.get_function_pointer(len(ti))
-    # pointer = InversionRecoveryT1Mapping.get_function_pointer()
+    pointer = InversionRecoveryT1Mapping.get_function_pointer()
     InversionRecoveryT1Mapping.fitting(tmp, input, ti, pointer)
     
     # reshape
@@ -73,53 +71,24 @@ def ir_se_t1_fitting(input: np.ndarray, ti: float, mask: np.ndarray = None) -> n
 class InversionRecoveryT1Mapping:
     """
     Inversion-Recovery T1 Mapping related routines.
-    """        
+    """           
     @staticmethod
-    @nb.njit(cache=True, fastmath=True)
-    def signal_model(ti, C, T1):
-        return np.abs(C * (1 - 2 * np.exp(-ti / T1) + np.exp(-5000.0 / T1)))
-    
-    @staticmethod
-    def get_function_pointer(nti):
+    def get_function_pointer():
         
-        # get function
-        func = InversionRecoveryT1Mapping.signal_model 
+        @nb.njit(cache=True, fastmath=True)
+        def signal_model(params, args):
         
-        @nb.cfunc(minpack_sig)
-        def _optimize(params_, res, args_):
+            # calculate elements
+            arg = params[0] * (1 - 2 * np.exp(-params[1] * args[0]))
+            f = np.abs(arg) - args[1]
             
-            # get parameters
-            params = nb.carray(params_, (2,))
-            C, T1  = params
-            
-            # get variables
-            args = nb.carray(args_, (2 * nti,))
-            x = args[:nti]
-            y = args[nti:]
-            
-            # compute residual
-            for i in range(nti):
-                res[i] = func(x[i], C, T1) - y[i] 
-                
-        return _optimize.address
-    
-    # @staticmethod
-    # def get_function_pointer():
-        
-    #     @nb.njit(cache=True, fastmath=True)
-    #     def signal_model(params, args):
-        
-    #         # calculate elements
-    #         f = np.abs(params[0] + params[1] * np.exp(-params[2] * args[0])) - args[1]
-            
-    #         # analytical jacobian
-    #         Jf0 = np.ones(f.shape, f.dtype)
-    #         Jf1 = np.exp(-params[2] * args[0])
-    #         Jf2 = -params[1] * args[0] * Jf1
+            # analytical jacobian
+            Jf0 = np.sign(arg) * (1 - 2 * np.exp(-params[1] * args[0]))
+            Jf1 = np.sign(arg) * 2 * args[0] * np.exp(-params[1] * args[0])
 
-    #         return f, np.stack((Jf0, Jf1, Jf2), axis=0)
+            return f, np.stack((Jf0, Jf1), axis=0)
         
-    #     return signal_model
+        return signal_model
     
     @staticmethod
     @nb.njit(parallel=True, fastmath=True)
@@ -127,18 +96,13 @@ class InversionRecoveryT1Mapping:
         
         # general fitting options
         nvoxels, neqs = input.shape
-        initial_guess = np.array([10.0, 1000.0], input.dtype) # C, D, T1
+        initial_guess = np.array([1.0, 1 / 1000.0], input.dtype) # C, T1
         
         # loop over voxels
         for n in nb.prange(nvoxels):   
-            # args = (ti, input[n])  
-            # try:
-            #     fitparam = lmdif(optimize_ptr , initial_guess, args)
-            #     output[n] = 1 / fitparam[-1]
-            # except:
-            #     pass
-                
-            args = np.append(ti, input[n])
-            fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
-            if success:
-                output[n] = fitparam[-1]
+            args = (ti, input[n])  
+            try:
+                fitparam = lmdif(optimize_ptr , initial_guess, args)
+                output[n] = 1 / fitparam[-1]
+            except:
+                pass

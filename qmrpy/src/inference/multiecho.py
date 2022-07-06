@@ -10,7 +10,6 @@ import numpy as np
 import numba as nb
 
 
-# from NumbaMinpack import minpack_sig, lmdif
 from qmrpy.src.inference.LM import lmdif
 
 
@@ -53,7 +52,6 @@ def me_transverse_relaxation_fitting(input: np.ndarray, te: float, mask: np.ndar
     output = np.zeros(ishape[1:], input.dtype)
     
     # do actual fit
-    # pointer = MultiechoTransverseRelaxationMapping.get_function_pointer(len(te))
     pointer = MultiechoTransverseRelaxationMapping.get_function_pointer()
     MultiechoTransverseRelaxationMapping.fitting(tmp, input, te, pointer)
         
@@ -73,35 +71,6 @@ class MultiechoTransverseRelaxationMapping:
     """
     Multi-echo Spin- (Gradient-) Echo T2 (T2*) Mapping related routines.
     """
-    # @staticmethod
-    # @nb.njit(cache=True, fastmath=True)
-    # def signal_model(te, A, T2):
-    #     return A * np.exp(- te / T2)
-    
-    # @staticmethod
-    # def get_function_pointer(nte):
-        
-    #     # get function
-    #     func = MultiechoTransverseRelaxationMapping.signal_model 
-        
-    #     @nb.cfunc(minpack_sig)
-    #     def _optimize(params_, res, args_):
-            
-    #         # get parameters
-    #         params = nb.carray(params_, (2,))
-    #         A, T2  = params
-            
-    #         # get variables
-    #         args = nb.carray(args_, (2 * nte,))
-    #         x = args[:nte]
-    #         y = args[nte:]
-            
-    #         # compute residual
-    #         for i in range(nte):
-    #             res[i] = func(x[i], A, T2) - y[i] 
-                
-    #     return _optimize.address
-    
     @staticmethod
     def get_function_pointer():
         
@@ -135,8 +104,3 @@ class MultiechoTransverseRelaxationMapping:
                 output[n] = 1 / fitparam[-1]
             except:
                 pass
-                
-            # args = np.append(te, input[n])         
-            # fitparam, fvec, success, info = lmdif(optimize_ptr , initial_guess, neqs, args)
-            # if success:
-            #     output[n] = fitparam[-1]
