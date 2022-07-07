@@ -67,7 +67,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     # reformat segmentation mask
     if len(segmentation_mask.shape) == 3:
         segmentation_mask = segmentation_mask[None, ...]
-        
+   
     # get mask
     mask = segmentation_mask.sum(axis=0)
               
@@ -84,7 +84,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     if magnitude[mask].std() != 0: 
         magnitude /=  magnitude[mask].std()
     
-    magnitude[not(mask)] = 100
+    magnitude[np.invert(mask)] = 100
 
     # prepare phase
     phase = np.angle(input)
@@ -96,6 +96,9 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     
     # transceive phase approximation
     phase *= -0.5
+    
+    # clean phase
+    phase = np.nan_to_num(phase).astype(np.float32)
     
     # actual computation
     conductivity = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask.copy(), omega0, resolution, kernel_size, kernel_shape, gaussian_weight_sigma)
@@ -154,7 +157,7 @@ def PhaseBasedSurfaceIntegralEPT(input: np.ndarray, resolution: np.ndarray, omeg
     if magnitude[mask].std() != 0: 
         magnitude /=  magnitude[mask].std()
     
-    magnitude[not(mask)] = 100
+    magnitude[np.invert(mask)] = 100
 
     # prepare phase
     phase = np.angle(input)
@@ -167,6 +170,9 @@ def PhaseBasedSurfaceIntegralEPT(input: np.ndarray, resolution: np.ndarray, omeg
     # transceive phase approximation
     phase *= -0.5
     
+    # clean phase
+    phase = np.nan_to_num(phase)
+    
     # actual computation
     conductivity = _PhaseBasedSurfaceIntegralEPT(phase, magnitude, segmentation_mask.copy(), omega0, resolution, kernel_diff_size, kernel_int_size, kernel_shape, gaussian_weight_sigma)
     
@@ -177,13 +183,13 @@ def PhaseBasedSurfaceIntegralEPT(input: np.ndarray, resolution: np.ndarray, omeg
     return conductivity
 
 
-def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0,resolution=1, kernel_size=26, kernel_shape='cross', gauss_sigma=0.45):
+def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0, resolution=1, kernel_size=26, kernel_shape='cross', gauss_sigma=0.45):
     
     # check if  resolution is scalar
     if isinstance(resolution, (np.ndarray, list, tuple)) is False:
-        resolution = np.array(3 * [resolution], dtype=np.int16)
+        resolution = np.array(3 * [resolution], dtype=np.float32)
     else:
-        resolution = np.asarray(resolution, dtype=np.int16)
+        resolution = np.asarray(resolution, dtype=np.float32)
         
     # prepare data
     data_prep = DataReformat(kernel_size)
@@ -195,7 +201,7 @@ def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0,resolution=1,
     
     # calculate conductivity
     conductivity = laplacian.sum(axis=0) / omega0 / mu0
-    
+        
     # crop
     return data_prep.reformat_data(conductivity)
             
@@ -204,9 +210,9 @@ def _PhaseBasedSurfaceIntegralEPT(phase, magnitude, segmentation, omega0, resolu
     
     # check if  resolution is scalar
     if isinstance(resolution, (np.ndarray, list, tuple)) is False:
-        resolution = np.array(3 * [resolution], dtype=np.int16)
+        resolution = np.array(3 * [resolution], dtype=np.float32)
     else:
-        resolution = np.asarray(resolution, dtype=np.int16)
+        resolution = np.asarray(resolution, dtype=np.float32)
         
     # prepare data
     grad_prep = DataReformat(kernel_diff_size)
@@ -237,15 +243,14 @@ def _PhaseBasedSurfaceIntegralEPT(phase, magnitude, segmentation, omega0, resolu
 #%% padding / cropping utils
 class DataReformat:
     
-    def __init__(self, kernel_size):
-        
+    def __init__(self, kernel_size):       
         # check if  kernel size is scalar
         if isinstance(kernel_size, (np.ndarray, list, tuple)) is False:
             kernel_size = np.array(3 * [kernel_size], dtype=np.int16)
         else:
             kernel_size = np.asarray(kernel_size, dtype=np.int16)
             
-        self.kernel_size = kernel_size
+        self._kernel_size = kernel_size
         
     def prepare_data(self, phase, magnitude, segmentation):
         """
@@ -259,37 +264,38 @@ class DataReformat:
             *output (list-of-ndarray): output padded data.
             idx (ndarray): indexes of original (non-padded) voxels.
             mask (ndarray): binary mask for output selection.
-        """
-        # group
-        args = [phase, magnitude, segmentation]
-        
+        """        
         # get kernel
         kernel_size = self._kernel_size
             
         # get input and output shape
-        ishape = args[0].shape
+        ishape = phase.shape
         oshape = [ishape[n] + kernel_size[n] for n in range(3)]
+        self.output = np.zeros(ishape, phase.dtype)
         
-        # pad images
-        output = [DataReformat._resize(arg, oshape) for arg in args]
+        # pad phase
+        phase = DataReformat._resize(phase, oshape)
+        magnitude = DataReformat._resize(magnitude, oshape)
+        segmentation = DataReformat._resize(segmentation, [segmentation.shape[0]] + oshape)
         
         # prepare mask
-        mask = np.ones(ishape, dtype=bool)
-        mask = DataReformat._resize(mask, oshape)
-        self.mask = mask
+        imask = np.ones(ishape, dtype=bool)
+        omask = DataReformat._resize(imask, oshape).astype(bool)
+        self.imask = imask
+        self.omask = omask
         
         # prepare indexes
         ind = []
         
         for n in range(segmentation.shape[0]):
-            i, j, k = np.argwhere(segmentation[n] * mask).transpose()
+            i, j, k = np.argwhere(segmentation[n]).transpose()
             ind.append(np.stack([i, j, k], axis=-1))
             
         ind = np.stack(ind, axis=0)
         
-        return output, ind
+        return phase, magnitude, segmentation, ind
     
-    def reformat_data(self, *input):
+    def reformat_data(self, input):
         """
         Reformat data for output.
         
@@ -299,8 +305,11 @@ class DataReformat:
         Returns
             *output (list-of-ndarray): output cropped data.
         """
-        mask = self.mask
-        output = [arg[mask] for arg in input]
+        output = self.output
+        
+        # assign
+        output[self.imask] = input[self.omask]
+        
         return output
         
     @staticmethod
@@ -365,7 +374,7 @@ class SurfaceIntegral:
         self.surface_kernel = self._surface_kernel(ds)
         
         # calculate patch grid
-        _, idx_offset, patch_mask, patch_edges = MovingOperatorsUtils._get_local_mesh_grid(size, shape, order=1, dx=dx)
+        _, idx_offset, patch_mask, patch_edges = _get_local_mesh_grid(size, shape, order=1, dx=dx)
         
         self.idx_offset = idx_offset
         self.patch_mask = patch_mask
@@ -374,7 +383,7 @@ class SurfaceIntegral:
         # set gaussian smoothing width
         self.sigma = sigma
         
-    def __apply__(self, ind, phase_gradient, magnitude, seg_mask):
+    def __call__(self, ind, phase_gradient, magnitude, seg_mask):
         
         # prepare output
         output = np.zeros(magnitude.shape, magnitude.dtype)
@@ -442,13 +451,13 @@ class SurfaceIntegral:
     def _integrate_within_patch(idx, idx_offset, phase_gradient, magnitude, sigma, seg_mask, patch_mask, patch_edges, prod_dx, volume_kernel, surface_kernel):
         
         # get local phase
-        local_phase_diff = [MovingOperatorsUtils._get_local_patch(phase_diff, idx, idx_offset) for phase_diff in phase_gradient]
+        local_phase_diff = [_get_local_patch(phase_diff, idx, idx_offset) for phase_diff in phase_gradient]
         
         # get local magnitude and voxel magnitude
-        local_magnitude = MovingOperatorsUtils._get_local_patch(magnitude, idx, idx_offset)
+        local_magnitude = _get_local_patch(magnitude, idx, idx_offset)
         
         # get local segmentation mask
-        local_mask = MovingOperatorsUtils._get_local_patch(seg_mask, idx, idx_offset)
+        local_mask = _get_local_patch(seg_mask, idx, idx_offset)
         
         # get local magnitude        
         voxel_magnitude = magnitude[idx[0], idx[1], idx[2]]
@@ -546,7 +555,7 @@ class LocalDerivative:
             dx = np.ones(3, dtype=np.float32)
         
         # calculate patch grid
-        grid, idx_offset, _, _ = MovingOperatorsUtils._get_local_mesh_grid(size, shape, order=order, dx=dx)
+        grid, idx_offset, _, _ = _get_local_mesh_grid(size, shape, order=order, dx=dx)
         
         self.grid = grid
         self.idx_offset = idx_offset
@@ -560,7 +569,7 @@ class LocalDerivative:
         else:
             self._differentiate = LocalDerivative._differentiate_within_patch
             
-    def __apply__(self, ind, phase, magnitude, seg_mask):
+    def __call__(self, ind, phase, magnitude, seg_mask):
         
         # prepare output
         output = np.zeros(list(magnitude.shape) + [3], magnitude.dtype)
@@ -570,10 +579,10 @@ class LocalDerivative:
         idx_offset = self.idx_offset
         sigma = self.sigma
         _differentiate = self._differentiate
-       
+        
         # actual integration
         for n in range(seg_mask.shape[0]):
-            LocalDerivative._parallel_convolution(output, phase, magnitude, seg_mask, ind, idx_offset, sigma, grid, _differentiate)
+            LocalDerivative._parallel_convolution(output, phase, magnitude, seg_mask[n], ind[n], idx_offset, sigma, grid, _differentiate)
         
         return np.ascontiguousarray(output.transpose(-1, 0, 1, 2))
       
@@ -583,220 +592,234 @@ class LocalDerivative:
         
         # general fitting options
         nvoxels, _ = ind.shape
-                                
+                                      
         # loop over voxels
-        for n in nb.prange(nvoxels):
-            output[ind[n, 0], ind[n, 1], ind[n, 2]] = _differentiate(ind[n], idx_offset, phase, magnitude, sigma, seg_mask, grid)
+        for n in range(1):
+            n = 10000
+            tmp = _differentiate(ind[n], idx_offset, phase, magnitude, sigma, seg_mask, grid)
+            output[ind[n, 0], ind[n, 1], ind[n, 2], :] = tmp
       
     @staticmethod
     @nb.njit(fastmath=True)
     def _differentiate_within_cross(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid):
-        
+
         # get local phase
-        local_phase = MovingOperatorsUtils._get_local_cross_patch(phase, idx, idx_offset)
+        local_phase = _get_local_cross_patch(phase, idx, idx_offset)
         
         # get local magnitude and voxel magnitude
-        local_magnitude = MovingOperatorsUtils._get_local_cross_patch(magnitude, idx, idx_offset)
+        local_magnitude = _get_local_cross_patch(magnitude, idx, idx_offset)
                 
         # get local segmentation mask
-        local_mask = MovingOperatorsUtils._get_local_cross_patch(seg_mask, idx, idx_offset)
+        local_mask = _get_local_cross_patch(seg_mask, idx, idx_offset)
         
         # get local magnitude        
         voxel_magnitude = magnitude[idx[0], idx[1], idx[2]]
         
         # prepare out
         coeffs = []
-        
+                
         # loop over axis
-        for ax in range(3):
-        
+        for ax in range(3):     
             # get weight
             weights = local_magnitude[ax] - voxel_magnitude
             weights = np.exp(- weights**2 / (2 * sigma**2))
             weights *= local_mask[ax]
             
             # do fit
-            a = grid[ax] * weights[..., None]
+            a = grid[ax] * np.expand_dims(weights, -1)
             b = local_phase[ax] * weights
-            coeffs.append(np.linalg.solve(a, b)[0])
+            try:
+                tmp = _lstsq(a, b)[0]
+                print(tmp)
+                print(np.linalg.lstsq(a, b)[0][0])
+                coeffs.append(tmp)            
+            except:
+                coeffs.append(0.0)
         
-        return coeffs
+        return np.array(coeffs, dtype=phase.dtype)
     
     @staticmethod
     @nb.njit(fastmath=True)
     def _differentiate_within_patch(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid):
         
         # get local phase
-        local_phase = MovingOperatorsUtils._get_local_patch(phase, idx, idx_offset)
+        local_phase = _get_local_patch(phase, idx, idx_offset)
         
         # get local magnitude and voxel magnitude
-        local_magnitude = MovingOperatorsUtils._get_local_patch(magnitude, idx, idx_offset)
+        local_magnitude = _get_local_patch(magnitude, idx, idx_offset)
         
         # get local segmentation mask
-        local_mask = MovingOperatorsUtils._get_local_patch(seg_mask, idx, idx_offset)
+        local_mask = _get_local_patch(seg_mask, idx, idx_offset)
         
         # get weight        
         voxel_magnitude = magnitude[idx[0], idx[1], idx[2]]
         weights = local_magnitude - voxel_magnitude
         weights = np.exp(- weights**2 / (2 * sigma**2))
         weights *= local_mask
-        
+                
         # do fit
-        a = grid * weights[..., None]
+        a = grid * np.expand_dims(weights, -1)
         b = local_phase * weights
-        coeffs = np.linalg.solve(a, b)
+        try:
+            tmp = _lstsq(a, b)[:3]
+            print(tmp)
+            print(np.linalg.lstsq(a, b)[0][:3])
+            coeffs = tmp
+        except:
+            coeffs = np.zeros(3, b.dtype)
         
-        return coeffs[:3]
+        return coeffs
 
 #%% common utils for sliding integration and differentiation
-class MovingOperatorsUtils:
+@nb.njit(fastmath=True)
+def _get_local_cross_patch(img, idx, idx_offset):
+    
+    # prepare output value
+    value = []
+    
+    # get patch center
+    z, y, x = idx
+    
+    # z-axis
+    patch_size = len(idx_offset[0])
+    val = np.zeros(patch_size, dtype=img.dtype)
+    
+    # populate patch
+    for n in range(patch_size):
+        dz = idx_offset[0][n]
+        val[n] = img[z + dz, y, x]
+    
+    # append
+    value.append(val)
+    
+    # y-axis
+    patch_size = len(idx_offset[1])
+    val = np.zeros(patch_size, dtype=img.dtype)
+    
+    # populate patch
+    for n in range(patch_size):
+        dy = idx_offset[1][n]
+        val[n] = img[z, y + dy, x]
+    
+    # append
+    value.append(val)
+    
+    # x-axis
+    patch_size = len(idx_offset[2])
+    val = np.zeros(patch_size, dtype=img.dtype)
+    
+    # populate patch
+    for n in range(patch_size):
+        dx = idx_offset[2][n]
+        val[n] = img[z, y, x + dx]
+    
+    # append
+    value.append(val)
+    
+    return value
+
+
+@nb.njit(fastmath=True)
+def _get_local_patch(img, idx, idx_offset):
+    
+    patch_size = len(idx_offset[0])
+    value = np.zeros(patch_size, dtype=img.dtype)
+    
+    # get patch center
+    z, y, x = idx
+    
+    # populate patch
+    for n in range(patch_size):
+        dx = idx_offset[2][n]
+        dy = idx_offset[1][n]
+        dz = idx_offset[0][n]
+        value[n] = img[z + dz, y + dy, x + dx]
+        
+    return value
+
+
+@nb.njit(fastmath=True)
+def _lstsq(a, b):
+    # return np.linalg.lstsq(a, b)[0]
+    return np.linalg.solve(np.dot(a.T, a), np.dot(a.T, b))
+
+
+def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
     """
-    Utilities for moving derivative and integral operators.
-    """        
-    @staticmethod
-    @nb.njit(fastmath=True)
-    def _get_local_cross_patch(img, idx, idx_offset):
-        
-        # prepare output value
-        value = []
-        
-        # get patch center
-        z, y, x = idx
-        
-        # z-axis
-        patch_size = len(idx_offset[0])
-        val = np.zeros(patch_size, dtype=img.dtype)
-        
-        # populate patch
-        for n in range(patch_size):
-            dz = idx_offset[0][n]
-            val[n] = img[z + dz, y, x]
-        
-        # append
-        value.append(val)
-        
-        # y-axis
-        patch_size = len(idx_offset[1])
-        val = np.zeros(patch_size, dtype=img.dtype)
-        
-        # populate patch
-        for n in range(patch_size):
-            dy = idx_offset[1][n]
-            val[n] = img[z, y + dy, x]
-        
-        # append
-        value.append(val)
-        
-        # x-axis
-        patch_size = len(idx_offset[2])
-        val = np.zeros(patch_size, dtype=img.dtype)
-        
-        # populate patch
-        for n in range(patch_size):
-            dx = idx_offset[2][n]
-            val[n] = img[z, y, x + dx]
-        
-        # append
-        value.append(val)
-        
-        return value
+    Get relative coordinates within a patch.
     
-    @staticmethod  
-    @nb.njit(fastmath=True)
-    def _get_local_patch(img, idx, idx_offset):
+    Args:
+        size (scalar, tuple-like): size of the patch. If scalar, assume isotropic patch.
+        shape (str): can be "cross", "cuboid" or "ellipse".
+        order (int): if 1, calculate gradient; if 2, calculate laplacian.
         
-        patch_size = len(idx_offset[0])
-        value = np.zeros(patch_size, dtype=img.dtype)
+    Returns:
+        grid (tuple-of-ndarray-of-float): grid coordinates for a 1-degree polynomial (order = 1) or 2-degree polynomial (order = 2).
+        idx_offset (tuple-of-ndarray-of-int): offset wrt the patch center.
+    """
+    # check if size is scalar
+    if isinstance(size, (np.ndarray, list, tuple)) is False:
+        size = np.array(3 * [size], dtype=np.float32)
+    else:
+        size = np.asarray(size, dtype=np.float32)
         
-        # get patch center
-        z, y, x = idx
+    # check isotropic kernel
+    assert len(np.unique(size)) == 1, "Anisotropic Kernel allowed for cross-shaped  and cuboid kernels only!"
         
-        # populate patch
-        for n in range(patch_size):
-            dx = idx_offset[2][n]
-            dy = idx_offset[1][n]
-            dz = idx_offset[0][n]
-            value[n] = img[z + dz, y + dy, x + dx]
-            
-        return value
+    axes = [np.flip(-np.arange(-ax // 2 + 1, ax // 2 + 1, dtype=np.float32)) for ax in size]
+    idx_offset = [ax.astype(np.int16) for ax in axes]
     
-    @staticmethod
-    def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
-        """
-        Get relative coordinates within a patch.
-        
-        Args:
-            size (scalar, tuple-like): size of the patch. If scalar, assume isotropic patch.
-            shape (str): can be "cross", "cuboid" or "ellipse".
-            order (int): if 1, calculate gradient; if 2, calculate laplacian.
+    # rescale axes to physical units
+    axes = [dx[ax] * axes[ax] for ax in range(3)]
             
-        Returns:
-            grid (tuple-of-ndarray-of-float): grid coordinates for a 1-degree polynomial (order = 1) or 2-degree polynomial (order = 2).
-            idx_offset (tuple-of-ndarray-of-int): offset wrt the patch center.
-        """
-        # check if size is scalar
-        if isinstance(size, (np.ndarray, list, tuple)) is False:
-            size = np.array(3 * [size], dtype=np.float32)
-        else:
-            size = np.asarray(size, dtype=np.float32)
-            
-        # check isotropic kernel
-        assert len(np.unique(size)) == 1, "Anisotropic Kernel allowed for cross-shaped  and cuboid kernels only!"
-        
-        axes = [np.flip(-np.arange(-ax // 2 + 1, ax // 2 + 1, dtype=np.float32)) for ax in size]
-        idx_offset = [ax.astype(np.int16) for ax in axes]
-        
-        # rescale axes to physical units
-        axes = [dx[ax] * axes[ax] for ax in range(3)]
-    
-        if shape == 'cross':
-            x, y, z = axes
-            xones, yones, zones = np.ones(x.shape, x.dtype), np.ones(y.shape, y.dtype), np.ones(z.shape, z.dtype)
-            if order == 1:              
-                grid = [np.stack((z, zones), axis=-1), np.stack((y, yones), axis=-1), np.stack((x, xones), axis=-1)]
-                return grid, idx_offset, None, None
-            
-            if order == 2:
-                x2, y2, z2 =  x**2, y**2, z**2            
-                grid = [np.stack((z2, z, zones), axis=-1), np.stack((y2, y, yones), axis=-1), np.stack((x2, x, xones), axis=-1)]
-                return grid, idx_offset, None, None
-                    
-        # build cubic grid    
-        yy, zz, xx = np.meshgrid(*axes, indexing='xy')
-        yy = np.flip(yy, axis=1)
-        axes = [xx, yy, zz]
-        
-        # remove corners
-        if shape == 'ellipsoid':
-            axes = np.stack(axes, axis=0)
-            rr = (axes**2).sum(axis=0)**0.5
-            todo = rr <= size[0] // 2
-            axes = [ax[todo] for ax in axes]
-            
-        # get edges
-        if shape == 'ellipsoid':
-            structure = ndimage.morphology.generate_binary_structure(3, 26)
-            patch_mask = todo.astype(np.float32)
-            edges = todo - ndimage.binary_erosion(patch_mask, structure=structure)
-        elif shape == 'cuboid':
-            patch_mask = np.ones(xx.shape, dtype=np.float32)
-            edges = np.ones(xx.shape, dtype=np.float32)
-            edges[1:-1,1:-1,1:-1] = 0
-                
-        # unpack axes
+    if shape == 'cross':
         x, y, z = axes
-        x, y, z = x.flatten(), y.flatten(), z.flatten()
-        idx_offset = [ax.astype(np.int16) for ax in [z, y, x]] 
-        
-        if order == 1:
-            grid = np.stack([[z, y, x], np.ones(x.shape, x.dtype)], axis=-1)
-            return grid, idx_offset, patch_mask, edges
-        if order == 2:
-            x2, y2, z2 = x**2, y**2, z**2
-            xy, yz, xz = x * y, y * z, x * z        
-            grid = np.stack([z2, y2, x2, z, y, x, xy, yz, xz, np.ones(x.shape, x.dtype)], axis=-1)
-            
+        xones, yones, zones = np.ones(x.shape, x.dtype), np.ones(y.shape, y.dtype), np.ones(z.shape, z.dtype)
+        if order == 1:              
+            grid = [np.stack((z, zones), axis=-1), np.stack((y, yones), axis=-1), np.stack((x, xones), axis=-1)]
             return grid, idx_offset, None, None
+        
+        if order == 2:
+            x2, y2, z2 =  x**2, y**2, z**2            
+            grid = [np.stack((z2, z, zones), axis=-1), np.stack((y2, y, yones), axis=-1), np.stack((x2, x, xones), axis=-1)]
+            return grid, idx_offset, None, None
+                
+    # build cubic grid    
+    yy, zz, xx = np.meshgrid(*axes, indexing='xy')
+    yy = np.flip(yy, axis=1)
+    axes = [xx, yy, zz]
+    
+    # remove corners
+    if shape == 'ellipsoid':
+        axes = np.stack(axes, axis=0)
+        rr = (axes**2).sum(axis=0)**0.5
+        todo = rr <= size[0] // 2
+        axes = [ax[todo] for ax in axes]
+        
+    # get edges
+    if shape == 'ellipsoid':
+        structure = ndimage.morphology.generate_binary_structure(3, 26)
+        patch_mask = todo.astype(np.float32)
+        edges = todo.astype(np.float32) - ndimage.binary_erosion(patch_mask, structure=structure)
+    elif shape == 'cuboid':
+        patch_mask = np.ones(xx.shape, dtype=np.float32)
+        edges = np.ones(xx.shape, dtype=np.float32)
+        edges[1:-1,1:-1,1:-1] = 0
+            
+    # unpack axes
+    x, y, z = axes
+    x, y, z = x.flatten(), y.flatten(), z.flatten()
+    idx_offset = [ax.astype(np.int16) for ax in [z, y, x]] 
+    
+    if order == 1:
+        grid = np.stack([[z, y, x], np.ones(x.shape, x.dtype)], axis=-1)
+        return grid, idx_offset, patch_mask, edges
+    if order == 2:
+        x2, y2, z2 = x**2, y**2, z**2
+        xy, yz, xz = x * y, y * z, x * z        
+        grid = np.stack([z2, y2, x2, z, y, x, xy, yz, xz, np.ones(x.shape, x.dtype)], axis=-1)
+        
+        return grid, idx_offset, None, None
         
 
 # post processing
@@ -818,7 +841,7 @@ class PostProcessing:
     def __init__(self, size, shape="cuboid"):
                 
         # calculate patch grid
-        _, idx_offset, _, _ = MovingOperatorsUtils._get_local_mesh_grid(size, shape)        
+        _, idx_offset, _, _ = _get_local_mesh_grid(size, shape)        
         self.idx_offset = idx_offset
                   
     def __apply__(self, ind, phase, seg_mask):
@@ -844,22 +867,22 @@ class PostProcessing:
                                 
         # loop over voxels
         for n in nb.prange(nvoxels):
-            output[ind[n, 0], ind[n, 1], ind[n, 2]] = PostProcessing._local_median(ind[n], idx_offset, seg_mask)
+            output[ind[n, 0], ind[n, 1], ind[n, 2]] = _local_median(ind[n], idx_offset, seg_mask)
     
-    @staticmethod
-    @nb.njit(fastmath=True)
-    def _local_median(idx, idx_offset, phase, seg_mask):
-        
-        # get local phase
-        local_phase = MovingOperatorsUtils._get_local_patch(phase, idx, idx_offset)
-                
-        # get local segmentation mask
-        local_mask = MovingOperatorsUtils._get_local_patch(seg_mask, idx, idx_offset)
-        
-        # get weight   
-        local_phase = local_phase[local_mask]
+    
+@nb.njit(fastmath=True)
+def _local_median(idx, idx_offset, phase, seg_mask):
+    
+    # get local phase
+    local_phase = _get_local_patch(phase, idx, idx_offset)
+            
+    # get local segmentation mask
+    local_mask = _get_local_patch(seg_mask, idx, idx_offset)
+    
+    # get weight   
+    local_phase = local_phase[local_mask]
 
-        return np.median(local_phase)
+    return np.median(local_phase)
     
 
         

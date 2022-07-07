@@ -9,7 +9,16 @@ here = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(here, "README.md")) as f:
     long_description = f.read()
 
-install_requires = ["click==8.0.3", "matplotlib==3.5.1", "nibabel==3.2.2", "numba==0.53.1", "numbaminpack==0.1.3", "numpy==1.21.1", "pydicom==2.2.2", "pytest==7.0.0", "scipy==1.7.3", "tqdm==4.62.3"]
+install_requires = ["click==8.0.3", 
+                    "matplotlib==3.5.1", 
+                    "nibabel==3.2.2", 
+                    "numba==0.53.1", 
+                    "numpy==1.21.1", 
+                    "pydicom==2.2.2", 
+                    "pytest==7.0.0", 
+                    "scipy==1.7.3", 
+                    "scikit-image==0.19.3"
+                    "tqdm==4.62.3"]
 
 setuptools.setup(
     name="qmrpy",
@@ -47,7 +56,7 @@ setuptools.setup(
     package_dir={"qmrpy": "qmrpy"},
     python_requires=">=3.7",
 
-    # install_requires=install_requires,
+    install_requires=install_requires,
     
     entry_points={'console_scripts': ['qmri = qmrpy.app:cli']},
 
