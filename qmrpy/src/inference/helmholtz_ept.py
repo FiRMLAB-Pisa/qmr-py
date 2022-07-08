@@ -594,8 +594,7 @@ class LocalDerivative:
         nvoxels, _ = ind.shape
                                       
         # loop over voxels
-        for n in range(1):
-            n = 10000
+        for n in range(nvoxels):
             tmp = _differentiate(ind[n], idx_offset, phase, magnitude, sigma, seg_mask, grid)
             output[ind[n, 0], ind[n, 1], ind[n, 2], :] = tmp
       
@@ -629,10 +628,7 @@ class LocalDerivative:
             a = grid[ax] * np.expand_dims(weights, -1)
             b = local_phase[ax] * weights
             try:
-                tmp = _lstsq(a, b)[0]
-                print(tmp)
-                print(np.linalg.lstsq(a, b)[0][0])
-                coeffs.append(tmp)            
+                coeffs.append(_lstsq(a, b)[0])          
             except:
                 coeffs.append(0.0)
         
@@ -661,10 +657,7 @@ class LocalDerivative:
         a = grid * np.expand_dims(weights, -1)
         b = local_phase * weights
         try:
-            tmp = _lstsq(a, b)[:3]
-            print(tmp)
-            print(np.linalg.lstsq(a, b)[0][:3])
-            coeffs = tmp
+            coeffs = _lstsq(a, b)[:3]
         except:
             coeffs = np.zeros(3, b.dtype)
         
@@ -768,13 +761,15 @@ def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
         
     axes = [np.flip(-np.arange(-ax // 2 + 1, ax // 2 + 1, dtype=np.float32)) for ax in size]
     idx_offset = [ax.astype(np.int16) for ax in axes]
-    
-    # rescale axes to physical units
-    axes = [dx[ax] * axes[ax] for ax in range(3)]
             
     if shape == 'cross':
+        # rescale axes to physical units
+        axes = [dx[ax] * axes[ax] for ax in range(3)]
+        
+        # prepare coordinates
         x, y, z = axes
         xones, yones, zones = np.ones(x.shape, x.dtype), np.ones(y.shape, y.dtype), np.ones(z.shape, z.dtype)
+        
         if order == 1:              
             grid = [np.stack((z, zones), axis=-1), np.stack((y, yones), axis=-1), np.stack((x, xones), axis=-1)]
             return grid, idx_offset, None, None
@@ -805,12 +800,17 @@ def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
         patch_mask = np.ones(xx.shape, dtype=np.float32)
         edges = np.ones(xx.shape, dtype=np.float32)
         edges[1:-1,1:-1,1:-1] = 0
-            
+        
+    # flatten axes
+    axes = [ax.flatten() for ax in axes]
+    idx_offset = [ax.astype(np.int16) for ax in axes] 
+    
+    # rescale axes to physical units
+    axes = [dx[ax] * axes[ax] for ax in range(3)]
+    
     # unpack axes
     x, y, z = axes
-    x, y, z = x.flatten(), y.flatten(), z.flatten()
-    idx_offset = [ax.astype(np.int16) for ax in [z, y, x]] 
-    
+
     if order == 1:
         grid = np.stack([[z, y, x], np.ones(x.shape, x.dtype)], axis=-1)
         return grid, idx_offset, patch_mask, edges
