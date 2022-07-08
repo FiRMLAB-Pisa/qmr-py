@@ -316,7 +316,7 @@ def phase_based_surface_integral_ept(input_path, output_path='./output',
                                      save_dicom=False, save_nifti=False, 
                                      mask_path=None, mask_threshold=0.05, 
                                      gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
-                                     kernel_diff_width=16, kernel_int_width=32, kernel_shape='ellipsoid',
+                                     kernel_diff_width=8, kernel_int_width=8, kernel_shape='ellipsoid',
                                      median_filter_width=0):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.

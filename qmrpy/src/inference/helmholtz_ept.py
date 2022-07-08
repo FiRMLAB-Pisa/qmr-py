@@ -216,22 +216,23 @@ def _PhaseBasedSurfaceIntegralEPT(phase, magnitude, segmentation, omega0, resolu
         
     # prepare data
     grad_prep = DataReformat(kernel_diff_size)
-    phase, magnitude, segmentation, ind = grad_prep.prepare_data(phase, magnitude, segmentation)
+    phase, mag_diff, seg_diff, ind = grad_prep.prepare_data(phase, magnitude, segmentation)
     
     # do laplacian
     gradient_operator = LocalDerivative(kernel_diff_size, gauss_sigma, shape=kernel_shape, dx=resolution, order=1)
-    phase_gradient = gradient_operator(ind, phase, magnitude, segmentation)
+    phase_gradient = gradient_operator(ind, phase, mag_diff, seg_diff)
     
     # crop
-    phase_gradient = grad_prep.reformat_data(phase_gradient, magnitude, segmentation)
+    phase_gradient = [grad_prep.reformat_data(phase_ax) for phase_ax in phase_gradient]
+    phase_gradient = np.stack(phase_gradient, axis=0)
     
     # prepare data
     data_prep = DataReformat(kernel_int_size)
-    phase_gradient, magnitude, segmentation, ind = data_prep.prepare_data(phase_gradient, magnitude, segmentation)
+    phase_gradient, mag_int, seg_int, ind = data_prep.prepare_data(phase_gradient, magnitude, segmentation)
     
     # do laplacian
     integral_operator = SurfaceIntegral(kernel_int_size, gauss_sigma, shape=kernel_shape, dx=resolution)
-    integral = integral_operator(ind, phase_gradient, magnitude, segmentation)
+    integral = integral_operator(ind, phase_gradient, mag_int.astype(np.float32), seg_int)
     
     # calculate conductivity
     conductivity = integral / omega0 / mu0
@@ -269,12 +270,19 @@ class DataReformat:
         kernel_size = self._kernel_size
             
         # get input and output shape
-        ishape = phase.shape
+        if len(phase.shape) == 3:
+            ishape = phase.shape
+        else:
+            ishape = phase.shape[1:]
         oshape = [ishape[n] + kernel_size[n] for n in range(3)]
         self.output = np.zeros(ishape, phase.dtype)
         
         # pad phase
-        phase = DataReformat._resize(phase, oshape)
+        if len(phase.shape) == 3:
+            phase = DataReformat._resize(phase, oshape)
+        else:
+            phase = DataReformat._resize(phase, [phase.shape[0]] + oshape)
+            
         magnitude = DataReformat._resize(magnitude, oshape)
         segmentation = DataReformat._resize(segmentation, [segmentation.shape[0]] + oshape)
         
@@ -305,7 +313,7 @@ class DataReformat:
         Returns
             *output (list-of-ndarray): output cropped data.
         """
-        output = self.output
+        output = self.output.copy()
         
         # assign
         output[self.imask] = input[self.omask]
@@ -383,6 +391,32 @@ class SurfaceIntegral:
         # set gaussian smoothing width
         self.sigma = sigma
         
+    def _surface_kernel(self, ds):
+        # z axis
+        zkernel = np.zeros((3, 1, 1), dtype=np.float32)
+        zkernel[0, 0, 0] = -ds[0]
+        zkernel[2, 0, 0] = ds[0]
+        
+        # y axis
+        ykernel = np.zeros((1, 3, 1), dtype=np.float32)
+        ykernel[0, 0, 0] = -ds[1]
+        ykernel[0, 2, 0] = ds[1]
+        
+        # x axis
+        xkernel = np.zeros((1, 1, 3), dtype=np.float32)
+        xkernel[0, 0, 0] = -ds[2]
+        xkernel[0, 0, 2] = ds[2]
+        
+        return zkernel, ykernel, xkernel
+        
+    def _volume_kernel(self, ds):
+        kernel = np.zeros((3, 3, 3), dtype=np.float32)
+        kernel[[0, 2]] = ds[0] 
+        kernel[:, [0, 2]] = ds[1] 
+        kernel[:, :, [0, 2]] = ds[2]
+        kernel = kernel / kernel.sum()
+        return kernel
+        
     def __call__(self, ind, phase_gradient, magnitude, seg_mask):
         
         # prepare output
@@ -404,7 +438,7 @@ class SurfaceIntegral:
         return output
         
     @staticmethod
-    @nb.njit(fastmath=True, parallel=True)
+    @nb.njit(cache=True, fastmath=True, parallel=True)
     def _parallel_convolution(output, phase_gradient, magnitude, seg_mask, ind, idx_offset, sigma, patch_mask, patch_edges, prod_dx, volume_kernel, surface_kernel):
         
         # general fitting options
@@ -412,139 +446,164 @@ class SurfaceIntegral:
                                 
         # loop over voxels
         for n in nb.prange(nvoxels):
-            output[ind[n, 0], ind[n, 1], ind[n, 2]] = SurfaceIntegral._integrate_within_patch(ind[n], idx_offset, phase_gradient, 
-                                                                                              magnitude, sigma, seg_mask, 
-                                                                                              patch_mask, patch_edges, 
-                                                                                              prod_dx, 
-                                                                                              volume_kernel, surface_kernel)
+            output[ind[n, 0], ind[n, 1], ind[n, 2]] = _integrate_within_patch(ind[n], idx_offset, phase_gradient, 
+                                                                              magnitude, sigma, seg_mask, 
+                                                                              patch_mask, patch_edges, 
+                                                                              prod_dx, 
+                                                                              volume_kernel, surface_kernel)
            
-    @staticmethod
-    def _surface_kernel(ds):
-        # z axis
-        zkernel = np.zeros((3, 1, 1), dtype=np.float32)
-        zkernel[0, 0, 0] = -ds[0]
-        zkernel[2, 0, 0] = ds[0]
-        
-        # y axis
-        ykernel = np.zeros((1, 3, 1), dtype=np.float32)
-        ykernel[0, 0, 0] = -ds[1]
-        ykernel[0, 2, 0] = ds[1]
-        
-        # x axis
-        xkernel = np.zeros((1, 1, 3), dtype=np.float32)
-        xkernel[0, 0, 0] = -ds[2]
-        xkernel[0, 0, 2] = ds[2]
-        
-        return zkernel, ykernel, xkernel
-        
-    @staticmethod
-    def _volume_kernel(ds):
-        kernel = np.zeros((3, 3, 3), dtype=np.float32)
-        kernel[[0, 2]] = ds[0] 
-        kernel[:, [0, 2]] = ds[1] 
-        kernel[:, :, [0, 2]] = ds[2]
-        kernel = kernel / kernel.sum()
-        return kernel
     
-    @staticmethod
-    @nb.njit(fastmath=True)
-    def _integrate_within_patch(idx, idx_offset, phase_gradient, magnitude, sigma, seg_mask, patch_mask, patch_edges, prod_dx, volume_kernel, surface_kernel):
-        
-        # get local phase
-        local_phase_diff = [_get_local_patch(phase_diff, idx, idx_offset) for phase_diff in phase_gradient]
-        
-        # get local magnitude and voxel magnitude
-        local_magnitude = _get_local_patch(magnitude, idx, idx_offset)
-        
-        # get local segmentation mask
-        local_mask = _get_local_patch(seg_mask, idx, idx_offset)
-        
-        # get local magnitude        
-        voxel_magnitude = magnitude[idx[0], idx[1], idx[2]]
-        local_magnitude_diff = np.abs(local_magnitude - voxel_magnitude)
-        
-        # get local patch mask
-        local_patch_mask = SurfaceIntegral._get_local_patch(local_mask, local_magnitude_diff, sigma, patch_mask, patch_edges)
-        
-        # get patch volume
-        local_volume = SurfaceIntegral._get_local_patch_volume(local_patch_mask, volume_kernel, prod_dx)
-        
-        # compute patch surface integral
-        local_surface_integral = SurfaceIntegral._get_local_patch_surface_integral(local_phase_diff, local_patch_mask, surface_kernel)
-        
-        return -local_surface_integral / local_volume
+@nb.njit(cache=True, fastmath=True)
+def _integrate_within_patch(idx, idx_offset, phase_gradient, magnitude, sigma, seg_mask, patch_mask, patch_edges, prod_dx, volume_kernel, surface_kernel):
     
-    @staticmethod
-    @nb.njit(fastmath=True)
-    def _get_local_patch(local_mask, local_magnitude_diff, sigma, patch_mask, patch_edges):
-        local_patch_mask = patch_mask.copy()
-        tmp = (patch_edges * (local_magnitude_diff > sigma).astype(np.float32)) + (patch_edges * (1 - local_mask))
-        tmp = tmp.astype(bool)
-        local_patch_mask[tmp] = 0
-        return local_patch_mask
+    # get local phase
+    local_phase_diff = [_get_local_patch(phase_diff, idx, idx_offset) for phase_diff in phase_gradient]
     
-    @staticmethod
-    @nb.njit(fastmath=True)
-    def _get_local_patch_volume(local_patch_mask, volume_kernel, prod_dx):
-        
-        # get volume
-        volume = SurfaceIntegral._conv3(local_patch_mask, volume_kernel) * local_patch_mask
-        
-        return volume.sum() * prod_dx
+    # get local magnitude and voxel magnitude
+    local_magnitude = _get_local_patch(magnitude, idx, idx_offset)
     
-    @staticmethod
-    @nb.njit(fastmath=True)
-    def _get_local_patch_surface_integral(local_phase_diff, local_patch_mask, surface_kernel):
-        
-        # get z surface
-        zsurface = SurfaceIntegral._conv3(local_patch_mask, surface_kernel[0]) * local_patch_mask
-        
-        # get y surface
-        ysurface = SurfaceIntegral._conv3(local_patch_mask, surface_kernel[1]) * local_patch_mask
-        
-        # get x surface
-        xsurface = SurfaceIntegral._conv3(local_patch_mask, surface_kernel[2]) * local_patch_mask
-        
-        # get surface integral
-        surface_integral = local_phase_diff[0] * zsurface + local_phase_diff[1] * ysurface + local_phase_diff[2] * xsurface
-        
-        return surface_integral.sum()
+    # get local segmentation mask
+    local_mask = _get_local_patch(seg_mask, idx, idx_offset)
     
+    # get local magnitude        
+    voxel_magnitude = magnitude[idx[0], idx[1], idx[2]]
+    local_magnitude_diff = np.abs(local_magnitude - voxel_magnitude)
     
-    @staticmethod
-    @nb.njit(fastmath=True)
-    def _conv3(input, kernel):
-        """
-        Numba-friendly 3d-convolution.        
-        """
-        # flip kernel
-        kernel = np.flip(kernel)
+    # get local patch mask
+    local_patch_mask = _get_local_patch_mask(local_mask, local_magnitude_diff, sigma, patch_mask, patch_edges)
+    
+    # get patch volume
+    local_volume = _get_local_patch_volume(local_patch_mask, volume_kernel, prod_dx)
+    
+    # compute patch surface integral
+    local_surface_integral = _get_local_patch_surface_integral(local_phase_diff, local_patch_mask, patch_mask, surface_kernel)
+    
+    return -local_surface_integral / local_volume
+
+
+@nb.njit(cache=True, fastmath=True)
+def _get_local_patch_mask(local_mask, local_magnitude_diff, sigma, patch_mask, patch_edges):
+    
+    # preserve input
+    local_patch_mask = patch_mask.copy()
+    idx = local_patch_mask > 0
+    
+    # form matrix
+    local_magnitude_diff_tmp = np.zeros(local_patch_mask.shape, np.float32)
+    local_mask_tmp = local_magnitude_diff_tmp.copy()
         
-        # get info
-        nz, ny, nx = input.shape
-        depth, width, height = kernel.shape
-        
-        # prepare output
-        output = np.zeros(input.shape, dtype=input.dtype)
+    _fill_matrix(local_magnitude_diff_tmp, local_magnitude_diff, idx)
+    _fill_matrix(local_mask_tmp, local_mask, idx)
+    
+    # get local indexes    
+    tmp = (patch_edges * (local_magnitude_diff_tmp > sigma).astype(np.float32)) + (patch_edges * (1 - local_mask_tmp))
+    idx = tmp > 0
+    
+    # correct local mask
+    _mask_matrix(local_patch_mask, idx)
+    
+    return local_patch_mask
+
+
+@nb.njit(cache=True, fastmath=True)
+def _fill_matrix(output, val, idx):
+    nz, ny, nx = output.shape
+    n = 0
+    for z in range(nz):
+        for y in range(ny):
+            for x in range(nx):
+                if idx[z, y, x]:
+                    output[z, y, x] = val[n]
+                    n += 1
+    
+                    
+@nb.njit(cache=True, fastmath=True)
+def _mask_matrix(output, idx):
+    nz, ny, nx = output.shape
+    for z in range(nz):
+        for y in range(ny):
+            for x in range(nx):
+                if idx[z, y, x]:
+                    output[z, y, x] = 0.0
+         
                 
-        # pad
-        padded_input = np.zeros((nz + depth, ny + width, nx + height), dtype=input.dtype)
-        padded_input[depth//2:-depth//2, width//2:-width//2, height//2:-height//2 ] = input
-                
-        # actual convolution
-        for z in range(nz):
-            for y in range(ny):
-                for x in range(nx):
-                    for dd in range(depth):
-                        for ww in range(width):
-                            for hh in range(height):
-                                inputval = padded_input[z + dd, y + ww, x + hh]
-                                kernelval = kernel[dd, ww, hh]
-                                output[z, y, x] += inputval * kernelval
-                                        
-        return np.flip(output)
+@nb.njit(cache=True, fastmath=True)
+def _get_local_patch_volume(local_patch_mask, volume_kernel, prod_dx):
     
+    # get volume
+    volume = _conv3(local_patch_mask, volume_kernel) * local_patch_mask
     
+    return volume.sum() * prod_dx
+
+
+@nb.njit(cache=True, fastmath=True)
+def _get_local_patch_surface_integral(local_phase_diff, local_patch_mask, global_patch_mask, surface_kernel):
+    
+    # get boolean indexes
+    idx = global_patch_mask > 0
+    
+    # get z surface
+    zsurface = _vectorize_matrix(_conv3(local_patch_mask, surface_kernel[0]) * local_patch_mask, idx)
+    
+    # get y surface
+    ysurface = _vectorize_matrix(_conv3(local_patch_mask, surface_kernel[1]) * local_patch_mask, idx)
+    
+    # get x surface
+    xsurface = _vectorize_matrix(_conv3(local_patch_mask, surface_kernel[2]) * local_patch_mask, idx)
+    
+    # get surface integral
+    surface_integral = local_phase_diff[0] * zsurface + local_phase_diff[1] * ysurface + local_phase_diff[2] * xsurface
+    
+    return surface_integral.sum()
+
+
+@nb.njit(cache=True, fastmath=True)
+def _vectorize_matrix(input, idx):
+    output = np.zeros(idx.sum(), input.dtype)
+    nz, ny, nx = input.shape
+    n = 0
+    for z in range(nz):
+        for y in range(ny):
+            for x in range(nx):
+                if idx[z, y, x]:
+                    output[n] = input[z, y, x]
+                    n += 1
+    
+    return output
+
+
+@nb.njit(cache=True, fastmath=True)
+def _conv3(input, kernel):
+    """
+    Numba-friendly 3d-convolution.        
+    """
+    # flip kernel
+    kernel = np.flip(kernel)
+    
+    # get info
+    nz, ny, nx = input.shape
+    depth, width, height = kernel.shape
+    
+    # prepare output
+    output = np.zeros(input.shape, dtype=input.dtype)
+            
+    # pad
+    padded_input = np.zeros((nz + depth, ny + width, nx + height), dtype=input.dtype)
+    padded_input[depth//2:-depth//2, width//2:-width//2, height//2:-height//2 ] = input
+            
+    # actual convolution
+    for z in range(nz):
+        for y in range(ny):
+            for x in range(nx):
+                for dd in range(depth):
+                    for ww in range(width):
+                        for hh in range(height):
+                            inputval = padded_input[z + dd, y + ww, x + hh]
+                            kernelval = kernel[dd, ww, hh]
+                            output[z, y, x] += inputval * kernelval
+                                    
+    return np.flip(output)
+       
 #%% derivative kernel generation
 class LocalDerivative:
     
@@ -587,19 +646,19 @@ class LocalDerivative:
         return np.ascontiguousarray(output.transpose(-1, 0, 1, 2))
       
     @staticmethod
-    @nb.njit(fastmath=True, parallel=True)
+    @nb.njit(cache=True, fastmath=True, parallel=True)
     def _parallel_convolution(output, phase, magnitude, seg_mask, ind, idx_offset, sigma, grid, _differentiate):
         
         # general fitting options
         nvoxels, _ = ind.shape
                                       
         # loop over voxels
-        for n in range(nvoxels):
+        for n in nb.prange(nvoxels):
             tmp = _differentiate(ind[n], idx_offset, phase, magnitude, sigma, seg_mask, grid)
             output[ind[n, 0], ind[n, 1], ind[n, 2], :] = tmp
       
     @staticmethod
-    @nb.njit(fastmath=True)
+    @nb.njit(cache=True, fastmath=True)
     def _differentiate_within_cross(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid):
 
         # get local phase
@@ -635,7 +694,7 @@ class LocalDerivative:
         return np.array(coeffs, dtype=phase.dtype)
     
     @staticmethod
-    @nb.njit(fastmath=True)
+    @nb.njit(cache=True, fastmath=True)
     def _differentiate_within_patch(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid):
         
         # get local phase
@@ -664,7 +723,7 @@ class LocalDerivative:
         return coeffs
 
 #%% common utils for sliding integration and differentiation
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def _get_local_cross_patch(img, idx, idx_offset):
     
     # prepare output value
@@ -712,7 +771,7 @@ def _get_local_cross_patch(img, idx, idx_offset):
     return value
 
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def _get_local_patch(img, idx, idx_offset):
     
     patch_size = len(idx_offset[0])
@@ -731,9 +790,8 @@ def _get_local_patch(img, idx, idx_offset):
     return value
 
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def _lstsq(a, b):
-    # return np.linalg.lstsq(a, b)[0]
     return np.linalg.solve(np.dot(a.T, a), np.dot(a.T, b))
 
 
@@ -812,7 +870,7 @@ def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
     x, y, z = axes
 
     if order == 1:
-        grid = np.stack([[z, y, x], np.ones(x.shape, x.dtype)], axis=-1)
+        grid = np.stack([z, y, x, np.ones(x.shape, x.dtype)], axis=-1)
         return grid, idx_offset, patch_mask, edges
     if order == 2:
         x2, y2, z2 = x**2, y**2, z**2
