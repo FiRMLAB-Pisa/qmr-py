@@ -88,6 +88,7 @@ class InversionRecoveryT1Mapping:
             Jf2 = np.sign(arg)
 
             return f, np.stack((Jf0, Jf1, Jf2), axis=0)
+            # return f, np.stack((Jf0, Jf1), axis=0)
         
         return signal_model
     
@@ -98,12 +99,13 @@ class InversionRecoveryT1Mapping:
         # general fitting options
         nvoxels, neqs = input.shape
         initial_guess = np.array([1.0, 1 / 1000.0, 0.0], input.dtype) # M0, T1, C
+        # initial_guess = np.array([1.0, 1 / 1000.0], input.dtype) # M0, T1
         
         # loop over voxels
         for n in nb.prange(nvoxels):   
             args = (ti, input[n])  
             try:
                 fitparam = lmdif(optimize_ptr , initial_guess, args)
-                output[n] = 1 / fitparam[-2]
+                output[n] = 1 / fitparam[1]
             except:
                 pass
