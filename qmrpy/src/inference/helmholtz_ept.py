@@ -9,6 +9,9 @@ import warnings
 
 import numpy as np
 import numba as nb
+import matplotlib.pyplot as plt
+
+
 from scipy import ndimage
 
 
@@ -20,6 +23,7 @@ from skimage.restoration import unwrap_phase as unwrap
 
 
 from qmrpy.src.inference import utils
+from qmrpy.src.inference.field_mapping import b0_multiecho_fitting
 
 
 # vacuum permeability
@@ -33,14 +37,11 @@ warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
 __all__ = ['PhaseBasedLaplacianEPT', 'PhaseBasedSurfaceIntegralEPT']
 
 
-# vacuum permeability
-mu0 = 4.0e-7 * np.pi # [H/m]
-
-
 def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: float,
                            gaussian_preprocessing_sigma: float = 0.0, gaussian_weight_sigma: float = 0.45,
                            kernel_size: int = 16, kernel_shape='cross', 
-                           median_filter_width: int = 0, segmentation_mask: np.ndarray = None) -> np.ndarray:
+                           median_filter_width: int = 0, segmentation_mask: np.ndarray = None,
+                           te: np.ndarray = None, fft_shift_along_z: bool = True) -> np.ndarray:
     """
     Calculate conductivity map from bSSFP data.
     
@@ -59,7 +60,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     """
     # preserve input
     input = input.copy().astype(np.complex64)
-        
+            
     # get segmentation mask
     if segmentation_mask is None:
         segmentation_mask = utils.mask(input)
@@ -67,6 +68,8 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     # reformat segmentation mask
     if len(segmentation_mask.shape) == 3:
         segmentation_mask = segmentation_mask[None, ...]
+        kernel_size = [kernel_size]
+        median_filter_width = [median_filter_width]
    
     # get mask
     mask = segmentation_mask.sum(axis=0)
@@ -76,7 +79,11 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
         input = gaussian_filter(input.real, gaussian_preprocessing_sigma) + 1j * gaussian_filter(input.imag, gaussian_preprocessing_sigma)
     
     # get magnitude and phase
-    magnitude = mask * np.abs(input)
+    if len(input.shape) == 4:
+        magnitude = mask * np.abs(input).sum(axis=0)
+    else:
+        magnitude = mask * np.abs(input)
+        
     mask = mask.astype(bool)
     
     # Normalise magnitude
@@ -85,29 +92,54 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
         magnitude /=  magnitude[mask].std()
     
     magnitude[np.invert(mask)] = 100
-
-    # prepare phase
-    phase = np.angle(input)
     
+    # prepare phase
+    if len(input.shape) == 4:
+        _, phase = b0_multiecho_fitting(input, te, mask, fft_shift_along_z)
+    else:
+        phase = np.angle(input)
+
     # uwrap
     true_phase = phase[phase.shape[0] // 2, phase.shape[1] // 2, phase.shape[2] // 2]
     phase = mask * unwrap(phase)
     phase = phase - phase[phase.shape[0] // 2, phase.shape[1] // 2, phase.shape[2] // 2] + true_phase
     
     # transceive phase approximation
-    phase *= -0.5
+    phase *= -1 # 0.5 still have to find out why...
     
     # clean phase
     phase = np.nan_to_num(phase).astype(np.float32)
     
+    # # remove B0 component
+    # linear_phase = _get_linear_component(mask, phase.copy())
+    # phase = phase - linear_phase
+
     # actual computation
-    conductivity = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask.copy(), omega0, resolution, kernel_size, kernel_shape, gaussian_weight_sigma)
-    
-    # post process
-    if median_filter_width is not None and median_filter_width > 0:
-        conductivity = _adaptive_median_filter(conductivity, segmentation_mask.copy(), median_filter_width, kernel_shape)
+    if len(segmentation_mask.shape) == 3:
+        conductivity, laplacian = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask, omega0, resolution, kernel_size, kernel_shape, gaussian_weight_sigma)
         
-    return conductivity
+        # post process
+        if median_filter_width is not None and median_filter_width > 0:
+            conductivity = _adaptive_median_filter(conductivity, segmentation_mask.copy(), median_filter_width, kernel_shape)
+            
+    else:
+        conductivity = []
+        laplacian = []
+        for n in range(segmentation_mask.shape[0]):
+            conductivity_tmp, laplacian_tmp = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask[[n]].copy(), omega0, resolution, kernel_size[n], kernel_shape, gaussian_weight_sigma)
+            
+            # post process
+            if median_filter_width[n] is not None and median_filter_width[n] > 0:
+                conductivity_tmp = _adaptive_median_filter(conductivity_tmp, segmentation_mask[[n]].copy(), median_filter_width[n], kernel_shape)
+                
+            conductivity.append(conductivity_tmp)
+            laplacian.append(laplacian_tmp)
+        
+        # merge regopms
+        conductivity = np.stack(conductivity, axis=0).sum(axis=0)
+        laplacian = np.stack(laplacian, axis=0).sum(axis=0)
+                
+    return conductivity, phase, laplacian
 
 
 def PhaseBasedSurfaceIntegralEPT(input: np.ndarray, resolution: np.ndarray, omega0: float,
@@ -174,14 +206,13 @@ def PhaseBasedSurfaceIntegralEPT(input: np.ndarray, resolution: np.ndarray, omeg
     phase = np.nan_to_num(phase)
     
     # actual computation
-    conductivity = _PhaseBasedSurfaceIntegralEPT(phase, magnitude, segmentation_mask.copy(), omega0, resolution, kernel_diff_size, kernel_int_size, kernel_shape, gaussian_weight_sigma)
+    conductivity = _PhaseBasedSurfaceIntegralEPT(phase.copy(), magnitude, segmentation_mask, omega0, resolution, kernel_diff_size, kernel_int_size, kernel_shape, gaussian_weight_sigma)
     
     # post process
     if median_filter_width is not None and median_filter_width > 0:
         conductivity = _adaptive_median_filter(conductivity, segmentation_mask.copy(), median_filter_width, kernel_shape)
         
     return conductivity
-
 
 def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0, resolution=1, kernel_size=26, kernel_shape='cross', gauss_sigma=0.45):
     
@@ -190,22 +221,25 @@ def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0, resolution=1
         resolution = np.array(3 * [resolution], dtype=np.float32)
     else:
         resolution = np.asarray(resolution, dtype=np.float32)
-        
+                    
     # prepare data
     data_prep = DataReformat(kernel_size)
     phase, magnitude, segmentation, ind = data_prep.prepare_data(phase, magnitude, segmentation)
-    
+        
     # do laplacian
     laplacian_operator = LocalDerivative(kernel_size, gauss_sigma, shape=kernel_shape, dx=resolution, order=2)
     laplacian = laplacian_operator(ind, phase, magnitude, segmentation)
     
     # calculate conductivity
-    conductivity = laplacian.sum(axis=0) / omega0 / mu0
+    conductivity = laplacian[:3].sum(axis=0) / omega0 / mu0
         
     # crop
-    return data_prep.reformat_data(conductivity)
-            
-    
+    laplacian = np.stack([data_prep.reformat_data(term) for term in laplacian], axis=0)
+    conductivity = data_prep.reformat_data(conductivity)
+        
+    return conductivity, laplacian
+  
+         
 def _PhaseBasedSurfaceIntegralEPT(phase, magnitude, segmentation, omega0, resolution=1, kernel_diff_size=20, kernel_int_size=40, kernel_shape='ellipsoid', gauss_sigma=0.45):
     
     # check if  resolution is scalar
@@ -241,6 +275,23 @@ def _PhaseBasedSurfaceIntegralEPT(phase, magnitude, segmentation, omega0, resolu
     return data_prep.reformat_data(conductivity)
 
 
+#%% plot utils
+def show(input, slices, vmin=0, vmax=1, cmap='jet'):
+    
+    # pad as cubic matrix
+    oshape = 3 * [max(input[0].shape)]
+    input = [DataReformat._resize(img, oshape) for img in input]
+    
+    # create matrix
+    out = [np.concatenate((img[slices[0]], np.flip(img[:, slices[1]]), np.flip(img[:, :, slices[2]])), axis=-1) for img in input]
+    out = np.concatenate(out, axis=0)
+    
+    # plot
+    plt.imshow(out, vmin=vmin, vmax=vmax, cmap=cmap)
+    plt.axis('off')
+    plt.colorbar()
+                                                                                         
+                                                                                                                                                                 
 #%% padding / cropping utils
 class DataReformat:
     
@@ -299,7 +350,7 @@ class DataReformat:
             i, j, k = np.argwhere(segmentation[n]).transpose()
             ind.append(np.stack([i, j, k], axis=-1))
             
-        ind = np.stack(ind, axis=0)
+        # ind = np.stack(ind, axis=0)
         
         return phase, magnitude, segmentation, ind
     
@@ -478,7 +529,7 @@ def _integrate_within_patch(idx, idx_offset, phase_gradient, magnitude, sigma, s
     # compute patch surface integral
     local_surface_integral = _get_local_patch_surface_integral(local_phase_diff, local_patch_mask, patch_mask, surface_kernel)
     
-    return -local_surface_integral / local_volume
+    return local_surface_integral / local_volume
 
 
 @nb.njit(cache=True, fastmath=True)
@@ -589,7 +640,7 @@ def _conv3(input, kernel):
             
     # pad
     padded_input = np.zeros((nz + depth, ny + width, nx + height), dtype=input.dtype)
-    padded_input[depth//2:-depth//2, width//2:-width//2, height//2:-height//2 ] = input
+    padded_input[depth//2:-depth//2, width//2:-width//2, height//2:-height//2] = input
             
     # actual convolution
     for z in range(nz):
@@ -602,16 +653,16 @@ def _conv3(input, kernel):
                             kernelval = kernel[dd, ww, hh]
                             output[z, y, x] += inputval * kernelval
                                     
-    return np.flip(output)
+    return output
        
 #%% derivative kernel generation
 class LocalDerivative:
     
     def __init__(self, size, sigma, shape="cuboid", dx=None, order=1):
-        
+                
         # set up dx
         if dx is None:
-            dx = np.ones(3, dtype=np.float32)
+            dx = np.ones(10, dtype=np.float32)
         
         # calculate patch grid
         grid, idx_offset, _, _ = _get_local_mesh_grid(size, shape, order=order, dx=dx)
@@ -631,7 +682,7 @@ class LocalDerivative:
     def __call__(self, ind, phase, magnitude, seg_mask):
         
         # prepare output
-        output = np.zeros(list(magnitude.shape) + [3], magnitude.dtype)
+        output = np.zeros(list(magnitude.shape) + [10], magnitude.dtype)
         
         # unpack
         grid = self.grid
@@ -716,9 +767,9 @@ class LocalDerivative:
         a = grid * np.expand_dims(weights, -1)
         b = local_phase * weights
         try:
-            coeffs = _lstsq(a, b)[:3]
+            coeffs = _lstsq(a, b)#[:3]
         except:
-            coeffs = np.zeros(3, b.dtype)
+            coeffs = np.zeros(10, b.dtype)
         
         return coeffs
 
@@ -795,6 +846,32 @@ def _lstsq(a, b):
     return np.linalg.solve(np.dot(a.T, a), np.dot(a.T, b))
 
 
+def _get_linear_component(mask, input):
+    
+    # get gridsize
+    gridsize = input.shape
+        
+    # build grid
+    axes = [np.flip(-np.arange(-ax // 2 + 1, ax // 2 + 1, dtype=np.float32)) for ax in gridsize]
+            
+    # build cubic grid    
+    zz, yy, xx = np.meshgrid(*axes, indexing='ij')
+    yy = np.flip(yy, axis=1)
+    
+    # flatten 
+    xx, yy, zz = xx[mask], yy[mask], zz[mask]
+    axes = np.stack([zz, yy, xx, np.ones(zz.shape, zz.dtype)], axis=-1)
+        
+    # fit phase
+    coeff = np.linalg.lstsq(axes, input[mask], rcond=None)[0]
+
+    # # # reshape
+    out = np.zeros(input.shape, input.dtype)
+    out[mask] =  (coeff * axes).sum(axis=-1)
+        
+    return out
+
+
 def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
     """
     Get relative coordinates within a patch.
@@ -813,6 +890,12 @@ def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
         size = np.array(3 * [size], dtype=np.float32)
     else:
         size = np.asarray(size, dtype=np.float32)
+        
+    # check if size is scalar
+    if isinstance(dx, (np.ndarray, list, tuple)) is False:
+        dx = np.array(3 * [dx], dtype=np.float32)
+    else:
+        dx = np.asarray(dx, dtype=np.float32)
         
     # check isotropic kernel
     assert len(np.unique(size)) == 1, "Anisotropic Kernel allowed for cross-shaped  and cuboid kernels only!"
@@ -865,24 +948,24 @@ def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
     
     # rescale axes to physical units
     axes = [dx[ax] * axes[ax] for ax in range(3)]
-    
+
     # unpack axes
-    x, y, z = axes
+    x, y, z = axes 
+    x2, y2, z2 = x**2, y**2, z**2
+    xy, yz, xz = x * y, y * z, x * z  
 
     if order == 1:
         grid = np.stack([z, y, x, np.ones(x.shape, x.dtype)], axis=-1)
         return grid, idx_offset, patch_mask, edges
-    if order == 2:
-        x2, y2, z2 = x**2, y**2, z**2
-        xy, yz, xz = x * y, y * z, x * z        
+    if order == 2:            
         grid = np.stack([z2, y2, x2, z, y, x, xy, yz, xz, np.ones(x.shape, x.dtype)], axis=-1)
-        
+
         return grid, idx_offset, None, None
         
 
 # post processing
 def _adaptive_median_filter(input, segmentation, filter_width, filter_shape='cuboid'):
-            
+                
     # prepare data
     data_prep = DataReformat(filter_width)
     input, _, segmentation, ind = data_prep.prepare_data(input, np.ones(input.shape, input.dtype), segmentation)
@@ -894,6 +977,7 @@ def _adaptive_median_filter(input, segmentation, filter_width, filter_shape='cub
     # crop
     return data_prep.reformat_data(output)
 
+
 class PostProcessing:
     
     def __init__(self, size, shape="cuboid"):
@@ -902,30 +986,30 @@ class PostProcessing:
         _, idx_offset, _, _ = _get_local_mesh_grid(size, shape)        
         self.idx_offset = idx_offset
                   
-    def __apply__(self, ind, phase, seg_mask):
+    def __call__(self, ind, phase, seg_mask):
         
         # prepare output
         output = np.zeros(phase.shape, phase.dtype)
         
         # unpack
         idx_offset = self.idx_offset
-       
+               
         # actual integration
         for n in range(seg_mask.shape[0]):
-            PostProcessing._parallel_convolution(output, phase, seg_mask, ind, idx_offset)
+            PostProcessing._parallel_convolution(output, phase, seg_mask[n], ind[n], idx_offset)
         
         return output
       
     @staticmethod
     @nb.njit(fastmath=True, parallel=True)
     def _parallel_convolution(output, phase, seg_mask, ind, idx_offset):
-        
+                
         # general fitting options
         nvoxels, _ = ind.shape
-                                
+        
         # loop over voxels
         for n in nb.prange(nvoxels):
-            output[ind[n, 0], ind[n, 1], ind[n, 2]] = _local_median(ind[n], idx_offset, seg_mask)
+            output[ind[n, 0], ind[n, 1], ind[n, 2]] = _local_median(ind[n], idx_offset, phase, seg_mask)
     
     
 @nb.njit(fastmath=True)

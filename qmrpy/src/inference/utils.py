@@ -13,6 +13,29 @@ from scipy import ndimage
 __all__ = ['mask']
 
 
+def measure_roi(input, segmentation, slices=None):
+    """
+    Get values from ROI.
+    """
+    # keep inputs
+    input = input.copy()
+    segmentation = segmentation.copy()
+    
+    # define range
+    if slices is None:
+        slices = [0, -1]
+
+    # select
+    input = input[slices[0]:slices[1], ...]
+    segmentation = segmentation[:, slices[0]:slices[1], ...]
+    
+    mean = [np.mean(input[segmentation[n]]) for n in range(segmentation.shape[0])]
+    median = [np.median(input[segmentation[n]]) for n in range(segmentation.shape[0])]
+    std = [np.std(input[segmentation[n]]) for n in range(segmentation.shape[0])]
+    
+    return mean, median, std
+
+
 def mask(input: np.ndarray, threshold: float = 0.05) -> np.ndarray:
     """
     Generate binary mask from input data.

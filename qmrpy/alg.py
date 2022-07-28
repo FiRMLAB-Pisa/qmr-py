@@ -47,7 +47,7 @@ def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
-        input_path = [os.path.join(input_path, folder) for folder in folders]
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
         rootdir = input_path[0].split(os.sep)[-2]
     else:
         input_path = os.path.abspath(input_path)
@@ -55,7 +55,7 @@ def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False
         
     # get output
     output_label = rootdir
-    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()
@@ -90,7 +90,7 @@ def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return longitudinal_relaxation_map
+    return longitudinal_relaxation_map, img
 
     
 def transverse_relaxation(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
@@ -110,7 +110,7 @@ def transverse_relaxation(input_path, output_path='./output', save_dicom=False, 
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
-        input_path = [os.path.join(input_path, folder) for folder in folders]
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
         rootdir = input_path[0].split(os.sep)[-2]
     else:
         input_path = os.path.abspath(input_path)
@@ -118,7 +118,7 @@ def transverse_relaxation(input_path, output_path='./output', save_dicom=False, 
         
     # get output
     output_label = rootdir
-    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()
@@ -153,7 +153,7 @@ def transverse_relaxation(input_path, output_path='./output', save_dicom=False, 
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return transverse_relaxation_map
+    return transverse_relaxation_map, img
     
 
 def transmit_field(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
@@ -173,7 +173,7 @@ def transmit_field(input_path, output_path='./output', save_dicom=False, save_ni
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
-        input_path = [os.path.join(input_path, folder) for folder in folders]
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
         rootdir = input_path[0].split(os.sep)[-2]
     else:
         input_path = os.path.abspath(input_path)
@@ -181,7 +181,7 @@ def transmit_field(input_path, output_path='./output', save_dicom=False, save_ni
         
     # get output
     output_label = rootdir
-    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()
@@ -219,12 +219,14 @@ def transmit_field(input_path, output_path='./output', save_dicom=False, save_ni
     return transmit_field_map
     
 
-def phase_based_laplacian_ept(input_path, output_path='./output', 
+def phase_based_laplacian_ept(input_path, output_path='./output',
+                              output_label = None,
                               save_dicom=False, save_nifti=False, 
                               mask_path=None, mask_threshold=0.05, 
                               gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
-                              laplacian_kernel_width=16, laplacian_kernel_shape='cross',
-                              median_filter_width=0):
+                              laplacian_kernel_width=16, laplacian_kernel_shape='ellipsoid',
+                              nclasses=3,
+                              median_filter_width=0, fft_shift_along_z=True):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
     
@@ -241,15 +243,16 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
-        input_path = [os.path.join(input_path, folder) for folder in folders]
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
         rootdir = input_path[0].split(os.sep)[-2]
     else:
         input_path = os.path.abspath(input_path)
         rootdir = input_path.split(os.sep)[-1]
         
     # get output
-    output_label = rootdir
-    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+    if output_label is None:
+        output_label = rootdir
+        output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()
@@ -268,6 +271,7 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
         elif info['nifti_template']:
             resolution = np.flip(info['nifti_template']['header']['pixdim'][1:4]) * 1e-3
             omega0 = 2 * np.pi * float(info['nifti_template']['json']['ImagingFrequency']) * 1e6
+        te = info['TE']
         pbar.update(step)
         
         # mask data
@@ -289,12 +293,21 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
             mask = inference.utils.mask(img)
         else:
             mask = None
+        
+        # fix kernel width
+        if isinstance(laplacian_kernel_width, (list, tuple)) is False:
+            if mask is not None and len(mask.shape) == 4:
+                laplacian_kernel_width = mask.shape[0] * [laplacian_kernel_width]
+                
+        if isinstance(median_filter_width, (list, tuple)) is False:
+            if mask is not None and len(mask.shape) == 4:
+                median_filter_width = mask.shape[0] * [median_filter_width]
             
         pbar.set_description("computing conductivity map...")
-        conductivity_map = inference.PhaseBasedLaplacianEPT(img, resolution, omega0, 
+        conductivity_map, phase, laplacian = inference.PhaseBasedLaplacianEPT(img, resolution, omega0, 
                                                             gaussian_preprocessing_sigma, gaussian_weight_sigma,
                                                             laplacian_kernel_width, laplacian_kernel_shape,
-                                                            median_filter_width, mask)                            
+                                                            median_filter_width, mask, te, fft_shift_along_z)                            
         pbar.update(step)
         
         if save_dicom:
@@ -302,21 +315,21 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
             io.write_dicom(conductivity_map, info, output_label + '_sigma', output_path + '_sigma')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(conductivity_map, info, output_label + '_sigma', output_path + '_sigma')
+            io.write_nifti(1000*conductivity_map, info, output_label, output_path)
             
         pbar.update(step)
         
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return conductivity_map
+    return conductivity_map, img, phase, laplacian, mask
 
 
 def phase_based_surface_integral_ept(input_path, output_path='./output', 
                                      save_dicom=False, save_nifti=False, 
                                      mask_path=None, mask_threshold=0.05, 
                                      gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
-                                     kernel_diff_width=8, kernel_int_width=8, kernel_shape='ellipsoid',
+                                     kernel_diff_width=4, kernel_int_width=4, kernel_shape='ellipsoid',
                                      median_filter_width=0):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
@@ -334,7 +347,7 @@ def phase_based_surface_integral_ept(input_path, output_path='./output',
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
-        input_path = [os.path.join(input_path, folder) for folder in folders]
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
         rootdir = input_path[0].split(os.sep)[-2]
     else:
         input_path = os.path.abspath(input_path)
@@ -342,7 +355,7 @@ def phase_based_surface_integral_ept(input_path, output_path='./output',
         
     # get output
     output_label = rootdir
-    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()
@@ -382,7 +395,7 @@ def phase_based_surface_integral_ept(input_path, output_path='./output',
             mask = inference.utils.mask(img)
         else:
             mask = None
-            
+
         pbar.set_description("computing conductivity map...")
         conductivity_map = inference.PhaseBasedSurfaceIntegralEPT(img, resolution, omega0, 
                                                                   gaussian_preprocessing_sigma, gaussian_weight_sigma,
@@ -402,7 +415,7 @@ def phase_based_surface_integral_ept(input_path, output_path='./output',
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return conductivity_map
+    return conductivity_map, mask
 
 
 def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path='./output', save_dicom=False, save_nifti=False):
@@ -416,7 +429,7 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, inpu
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
-        input_path = [os.path.join(input_path, folder) for folder in folders]
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
         rootdir = input_path[0].split(os.sep)[-2]
     else:
         input_path = os.path.abspath(input_path)
@@ -424,7 +437,7 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, inpu
         
     # get output
     output_label = rootdir
-    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()
@@ -479,7 +492,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
-        input_path = [os.path.join(input_path, folder) for folder in folders]
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
         rootdir = input_path[0].split(os.sep)[-2]
     else:
         input_path = os.path.abspath(input_path)
@@ -487,7 +500,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         
     # get output
     output_label = rootdir
-    output_path = os.path.abspath(os.path.join(output_path, rootdir))
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()

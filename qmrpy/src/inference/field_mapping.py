@@ -9,7 +9,10 @@ Created on Mon Feb  7 14:57:00 2022
 import numpy as np
 
 
-__all__ = ['b1_dam_fitting']
+from skimage.restoration import unwrap_phase as unwrap
+
+
+__all__ = ['b1_dam_fitting', 'b0_multiecho_fitting']
 
 
 def b1_dam_fitting(input: np.ndarray, fa: float, mask: np.ndarray = None) -> np.ndarray:
@@ -58,3 +61,59 @@ def b1_dam_fitting(input: np.ndarray, fa: float, mask: np.ndarray = None) -> np.
         b1map = mask * b1map
         
     return b1map
+
+
+def b0_multiecho_fitting(input: np.ndarray, te: float, mask: np.ndarray = None, unipolar_echoes = None, fft_shift_along_z=True) -> np.ndarray:
+    
+    # preserve input
+    input = input.copy()
+    
+    if unipolar_echoes is not None:
+        input = input[unipolar_echoes::2]
+        te = te[unipolar_echoes::2]
+    
+    # fix fftshift
+    if fft_shift_along_z is True:
+        input = np.fft.ifft(np.fft.fftshift(np.fft.fft(input, axis=1), axes=(1)), axis=1)
+        
+    # get phase
+    phase = np.angle(input)
+    
+    # mask
+    if mask is not None:
+        phase = mask * phase
+    
+    # get number of echoes
+    nechoes = len(te)
+    
+    # uwrap across space
+    for n in range(nechoes):
+        true_phase = phase[n, phase.shape[1] // 2, phase.shape[2] // 2, phase.shape[3] // 2]
+        phase[n] = mask * unwrap(phase[n])
+        phase[n] = phase[n] - phase[n, phase.shape[0] // 2, phase.shape[1] // 2, phase.shape[2] // 2] + true_phase
+    
+    # unwrap across echoes
+    true_phase = phase[0]
+    phase = np.unwrap(phase, axis=0)
+    phase = phase - phase[0] + true_phase
+    
+    # clean phase
+    phase = np.nan_to_num(mask * phase).astype(np.float32)
+    
+    # fit linear phase
+    x = np.stack([te / 1000, np.ones(te.shape, te.dtype)], axis=-1)
+    y = phase[:, mask]
+    
+    # do fit
+    p = np.linalg.lstsq(x, y, rcond=None)[0]
+    
+    # build output
+    b0map = np.zeros(phase[0].shape, phase.dtype)
+    b0map[mask] = p[0] / 2 / np.pi
+    
+    b1phase = np.zeros(phase[0].shape, phase.dtype)
+    b1phase[mask] = p[1]
+    
+    return b0map, b1phase
+
+

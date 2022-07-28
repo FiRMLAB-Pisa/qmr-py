@@ -48,22 +48,23 @@ def read_data(paths: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
         return read_nifti(paths)
 
 
-def read_segmentation(mask_path: str) -> np.ndarray:
+def read_segmentation(mask_path: str, nclasses: int = 3) -> np.ndarray:
     """
     Load segmentation for better reconstruction conditioning.
     """
     # get full path
-    mask_path = os.path.normpath(mask_path)
+    mask_path = os.path.normpath(os.path.abspath(mask_path))
     
     # split path
     mask_path_parts = mask_path.split(os.sep)
     mask_path = []
-    
+
     # create paths for gm, wm, csf
-    for n in range(3):
+    for n in range(nclasses):
         filename = 'c' + str(n+1) + mask_path_parts[-1]
-        mask_path.append(os.path.join(*mask_path_parts[:-1], filename))
-        
+        tmp = os.path.join(*mask_path_parts[1:-1], filename)
+        mask_path.append(os.path.abspath(mask_path_parts[0] + os.path.sep + tmp))
+
     return read_nifti(mask_path)
     
     
@@ -86,7 +87,7 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
     if isinstance(nifti_files, (list, tuple)):
         
         # get file path
-        nifti_files = [os.path.normpath(file) for file in nifti_files 
+        nifti_files = [os.path.normpath(os.path.abspath(file)) for file in nifti_files 
                        if file.endswith('.nii') or file.endswith('.nii.gz')]
         file_path = nifti_files
         
@@ -141,18 +142,18 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             header = img[0].header
             
     else:
-        file_path = [os.path.normpath(nifti_files)]
+        file_path = [os.path.normpath(os.path.abspath(nifti_files))]
         img = nib.load(file_path[0])
         data = img.get_fdata()
         affine = img.affine
         header = img.header
         
     data = np.flip(data.transpose(), axis=-2)
-    
+        
     # get json
     try:
         root = os.path.dirname(file_path[0])
-        json_paths = [os.path.normpath(str(path)) for path in sorted(pathlib.Path(root).glob('*.json'))]
+        json_paths = [os.path.normpath(os.path.abspath(str(path))) for path in sorted(pathlib.Path(root).glob('*.json'))]
         
         # init fields
         B0 = []
@@ -176,7 +177,12 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
                 TI.append(np.Inf)
                 
             TE.append(1e3 * json_dict['EchoTime'])
-            EC.append(json_dict['EchoNumber'])
+            
+            if 'EchoNumber' in json_dict:
+                EC.append(json_dict['EchoNumber'])
+            else:
+                EC.append(1)
+                
             TR.append(1e3 * json_dict['RepetitionTime'])
             FA.append(json_dict['FlipAngle'])
             
@@ -203,7 +209,7 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             FA = FA[0]
                                 
         return data, {'nifti_template': {'affine': affine, 'header': header, 'json': json_dict}, 'dcm_template': {}, 'B0': B0, 'EC': EC, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
-    
+        
     except:
         return data, {'nifti_template': {'affine': affine, 'header': header, 'json': {}}, 'dcm_template': {}, 'B0': None, 'EC': None, 'TI': None, 'TE': None, 'TR': None, 'FA': None}
         

@@ -67,7 +67,7 @@ def _get_full_path(root, file_list):
     """
     Create list of full file paths from file name and root folder path.
     """
-    return [os.path.normpath(os.path.join(root, file)) for file in file_list]
+    return [os.path.normpath(os.path.abspath(os.path.join(root, file))) for file in file_list]
 
 
 def _probe_dicom_paths(dcm_paths_in):
