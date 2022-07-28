@@ -104,6 +104,6 @@ class InversionRecoveryT1Mapping:
             args = (ti, input[n])  
             try:
                 fitparam = lmdif(optimize_ptr , initial_guess, args)
-                output[n] = 1 / fitparam[-1]
+                output[n] = 1 / fitparam[-2]
             except:
                 pass
