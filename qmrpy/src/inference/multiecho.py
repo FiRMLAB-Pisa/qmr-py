@@ -78,7 +78,7 @@ class MultiechoTransverseRelaxationMapping:
         def signal_model(params, args):
         
             # calculate elements
-            arg = (params[0] * np.exp(-params[1] * args[0])) # + params[2]
+            arg = (params[0] * np.exp(-params[1] * args[0]))# + params[2]
             f = np.abs(arg) - args[1]
             
             # analytical jacobian

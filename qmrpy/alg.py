@@ -322,7 +322,7 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return conductivity_map, img, phase, laplacian, mask
+    return conductivity_map, img, phase, laplacian, segmentation
 
 
 def phase_based_surface_integral_ept(input_path, output_path='./output', 

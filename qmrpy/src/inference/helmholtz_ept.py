@@ -69,6 +69,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     if len(segmentation_mask.shape) == 3:
         segmentation_mask = segmentation_mask[None, ...]
         kernel_size = [kernel_size]
+        gaussian_weight_sigma = [gaussian_weight_sigma]
         median_filter_width = [median_filter_width]
    
     # get mask
@@ -105,7 +106,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     phase = phase - phase[phase.shape[0] // 2, phase.shape[1] // 2, phase.shape[2] // 2] + true_phase
     
     # transceive phase approximation
-    phase *= -1 # 0.5 still have to find out why...
+    phase *= -1
     
     # clean phase
     phase = np.nan_to_num(phase).astype(np.float32)
@@ -126,7 +127,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
         conductivity = []
         laplacian = []
         for n in range(segmentation_mask.shape[0]):
-            conductivity_tmp, laplacian_tmp = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask[[n]].copy(), omega0, resolution, kernel_size[n], kernel_shape, gaussian_weight_sigma)
+            conductivity_tmp, laplacian_tmp = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask[[n]].copy(), omega0, resolution, kernel_size[n], kernel_shape, gaussian_weight_sigma[n])
             
             # post process
             if median_filter_width[n] is not None and median_filter_width[n] > 0:
