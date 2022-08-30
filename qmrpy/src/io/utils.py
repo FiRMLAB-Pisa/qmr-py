@@ -421,49 +421,50 @@ def _get_dicom_template(dsets, index):
         dset.SeriesDescription = None
         dset.SeriesNumber = SeriesNumber
         dset.SeriesInstanceUID = None
+        dset.SOPInstanceUID = None
     
         dset.InstanceNumber = None
         
         try:
-            dsets[n].ImagesInAcquisition = None
+            dset.ImagesInAcquisition = None
         except:
             pass
         try:
-            dsets[n][0x0025, 0x1007].value = None
+            dset[0x0025, 0x1007].value = None
         except:
             pass
         try:
-            dsets[n][0x0025, 0x1019].value = None
+            dset[0x0025, 0x1019].value = None
         except:
             pass   
         try:
-            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1052].value = '0.0'
+            dset[0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1052].value = '0.0'
         except:
             pass
         try:
-            dsets[n][0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1053].value = '1.0'
+            dset[0x2001, 0x9000][0][0x2001, 0x1068][0][0x0028, 0x1053].value = '1.0'
         except:
             pass
         try:
-            dsets[n][0x2005, 0x100e].value = 1.0
+            dset[0x2005, 0x100e].value = 1.0
         except:
             pass
         try:
-            dsets[n][0x0040, 0x9096][0][0x0040,0x9224].value = 0.0
+            dset[0x0040, 0x9096][0][0x0040,0x9224].value = 0.0
         except:
             pass
         try:
-            dsets[n][0x0040, 0x9096][0][0x0040,0x9225].value = 1.0
+            dset[0x0040, 0x9096][0][0x0040,0x9225].value = 1.0
         except:
             pass
         
-        dsets[n][0x0018, 0x0086].value = '1' # Echo Number
-        dsets[n].InversionTime = '0'
-        dsets[n].EchoTime = '0'
-        dsets[n].EchoNumbers = '1'
-        dsets[n].EchoTrainLength = '1'
-        dsets[n].RepetitionTime = '0'
-        dsets[n].FlipAngle = '0'
+        dset[0x0018, 0x0086].value = '1' # Echo Number
+        dset.InversionTime = '0'
+        dset.EchoTime = '0'
+        dset.EchoNumbers = '1'
+        dset.EchoTrainLength = '1'
+        dset.RepetitionTime = '0'
+        dset.FlipAngle = '0'
         
         template.append(dset)
     

@@ -97,7 +97,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
             dsets[n].SeriesNumber = series_number
             dsets[n].SeriesInstanceUID = SeriesInstanceUID
         
-            # dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
+            dsets[n].SOPInstanceUID = pydicom.uid.generate_uid()
             dsets[n].InstanceNumber = str(n + 1)
             
             try:
