@@ -41,7 +41,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
                            gaussian_preprocessing_sigma: float = 0.0, gaussian_weight_sigma: float = 0.45,
                            kernel_size: int = 16, kernel_shape='cross', 
                            median_filter_width: int = 0, segmentation_mask: np.ndarray = None,
-                           te: np.ndarray = None, fft_shift_along_z: bool = True) -> np.ndarray:
+                           te: np.ndarray = None, fft_shift_along_z: bool = True, local_mask_threshold: float = np.inf) -> np.ndarray:
     """
     Calculate conductivity map from bSSFP data.
     
@@ -112,26 +112,26 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
     phase = np.nan_to_num(phase).astype(np.float32)
     
     # # remove B0 component
-    # linear_phase = _get_linear_component(mask, phase.copy())
-    # phase = phase - linear_phase
+    linear_phase = _get_linear_component(mask, phase.copy())
+    phase = phase - linear_phase
 
     # actual computation
     if len(segmentation_mask.shape) == 3:
-        conductivity, laplacian = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask, omega0, resolution, kernel_size, kernel_shape, gaussian_weight_sigma)
+        conductivity, laplacian = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask, omega0, resolution, kernel_size, kernel_shape, gaussian_weight_sigma, local_mask_threshold)
         
         # post process
         if median_filter_width is not None and median_filter_width > 0:
-            conductivity = _adaptive_median_filter(conductivity, segmentation_mask.copy(), median_filter_width, kernel_shape)
+            conductivity = _adaptive_median_filter(conductivity, magnitude, segmentation_mask.copy(), median_filter_width, kernel_shape, local_mask_threshold)
             
     else:
         conductivity = []
         laplacian = []
         for n in range(segmentation_mask.shape[0]):
-            conductivity_tmp, laplacian_tmp = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask[[n]].copy(), omega0, resolution, kernel_size[n], kernel_shape, gaussian_weight_sigma[n])
+            conductivity_tmp, laplacian_tmp = _PhaseBasedLaplacianEPT(phase, magnitude, segmentation_mask[[n]].copy(), omega0, resolution, kernel_size[n], kernel_shape, gaussian_weight_sigma[n], local_mask_threshold)
             
             # post process
             if median_filter_width[n] is not None and median_filter_width[n] > 0:
-                conductivity_tmp = _adaptive_median_filter(conductivity_tmp, segmentation_mask[[n]].copy(), median_filter_width[n], kernel_shape)
+                conductivity_tmp = _adaptive_median_filter(conductivity_tmp, magnitude, segmentation_mask[[n]].copy(), median_filter_width[n], kernel_shape, local_mask_threshold)
                 
             conductivity.append(conductivity_tmp)
             laplacian.append(laplacian_tmp)
@@ -215,7 +215,7 @@ def PhaseBasedSurfaceIntegralEPT(input: np.ndarray, resolution: np.ndarray, omeg
         
     return conductivity
 
-def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0, resolution=1, kernel_size=26, kernel_shape='cross', gauss_sigma=0.45):
+def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0, resolution=1, kernel_size=26, kernel_shape='cross', gauss_sigma=0.45, local_mask_threshold=np.inf):
     
     # check if  resolution is scalar
     if isinstance(resolution, (np.ndarray, list, tuple)) is False:
@@ -229,7 +229,7 @@ def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0, resolution=1
         
     # do laplacian
     laplacian_operator = LocalDerivative(kernel_size, gauss_sigma, shape=kernel_shape, dx=resolution, order=2)
-    laplacian = laplacian_operator(ind, phase, magnitude, segmentation)
+    laplacian = laplacian_operator(ind, phase, magnitude, segmentation, local_mask_threshold)
     
     # calculate conductivity
     conductivity = laplacian[:3].sum(axis=0) / omega0 / mu0
@@ -680,7 +680,7 @@ class LocalDerivative:
         else:
             self._differentiate = LocalDerivative._differentiate_within_patch
             
-    def __call__(self, ind, phase, magnitude, seg_mask):
+    def __call__(self, ind, phase, magnitude, seg_mask, local_mask_threshold):
         
         # prepare output
         output = np.zeros(list(magnitude.shape) + [10], magnitude.dtype)
@@ -693,25 +693,25 @@ class LocalDerivative:
         
         # actual integration
         for n in range(seg_mask.shape[0]):
-            LocalDerivative._parallel_convolution(output, phase, magnitude, seg_mask[n], ind[n], idx_offset, sigma, grid, _differentiate)
+            LocalDerivative._parallel_convolution(output, phase, magnitude, seg_mask[n], ind[n], idx_offset, sigma, grid, _differentiate, local_mask_threshold)
         
         return np.ascontiguousarray(output.transpose(-1, 0, 1, 2))
       
     @staticmethod
     @nb.njit(cache=True, fastmath=True, parallel=True)
-    def _parallel_convolution(output, phase, magnitude, seg_mask, ind, idx_offset, sigma, grid, _differentiate):
+    def _parallel_convolution(output, phase, magnitude, seg_mask, ind, idx_offset, sigma, grid, _differentiate, local_mask_threshold):
         
         # general fitting options
         nvoxels, _ = ind.shape
                                       
         # loop over voxels
         for n in nb.prange(nvoxels):
-            tmp = _differentiate(ind[n], idx_offset, phase, magnitude, sigma, seg_mask, grid)
+            tmp = _differentiate(ind[n], idx_offset, phase, magnitude, sigma, seg_mask, grid, local_mask_threshold)
             output[ind[n, 0], ind[n, 1], ind[n, 2], :] = tmp
       
     @staticmethod
     @nb.njit(cache=True, fastmath=True)
-    def _differentiate_within_cross(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid):
+    def _differentiate_within_cross(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid, local_mask_threshold):
 
         # get local phase
         local_phase = _get_local_cross_patch(phase, idx, idx_offset)
@@ -747,7 +747,7 @@ class LocalDerivative:
     
     @staticmethod
     @nb.njit(cache=True, fastmath=True)
-    def _differentiate_within_patch(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid):
+    def _differentiate_within_patch(idx, idx_offset, phase, magnitude, sigma, seg_mask, grid, local_mask_threshold):
         
         # get local phase
         local_phase = _get_local_patch(phase, idx, idx_offset)
@@ -758,11 +758,16 @@ class LocalDerivative:
         # get local segmentation mask
         local_mask = _get_local_patch(seg_mask, idx, idx_offset)
         
-        # get weight        
+        # get magnitude difference        
         voxel_magnitude = magnitude[idx[0], idx[1], idx[2]]
-        weights = local_magnitude - voxel_magnitude
-        weights = np.exp(- weights**2 / (2 * sigma**2))
+        magnitude_diff = local_magnitude - voxel_magnitude
+        
+        # get weight  
+        weights = np.exp(- magnitude_diff**2 / (2 * sigma**2))
         weights *= local_mask
+        
+        # remove voxels with local magnitude difference >= 20%
+        weights *= (np.abs(magnitude_diff / voxel_magnitude) <= local_mask_threshold)
                 
         # do fit
         a = grid * np.expand_dims(weights, -1)
@@ -965,15 +970,15 @@ def _get_local_mesh_grid(size, shape='cuboid', order=2, dx=1):
         
 
 # post processing
-def _adaptive_median_filter(input, segmentation, filter_width, filter_shape='cuboid'):
+def _adaptive_median_filter(conductivity, magnitude, segmentation, filter_width, filter_shape='cuboid', local_mask_threshold=np.inf):
                 
     # prepare data
     data_prep = DataReformat(filter_width)
-    input, _, segmentation, ind = data_prep.prepare_data(input, np.ones(input.shape, input.dtype), segmentation)
+    conductivity, magnitude, segmentation, ind = data_prep.prepare_data(conductivity, np.ones(conductivity.shape, conductivity.dtype), segmentation)
     
     # do laplacian
     filter_operator = PostProcessing(filter_width, filter_shape)
-    output = filter_operator(ind, input, segmentation)
+    output = filter_operator(ind, conductivity, magnitude, segmentation, local_mask_threshold)
     
     # crop
     return data_prep.reformat_data(output)
@@ -987,45 +992,55 @@ class PostProcessing:
         _, idx_offset, _, _ = _get_local_mesh_grid(size, shape)        
         self.idx_offset = idx_offset
                   
-    def __call__(self, ind, phase, seg_mask):
+    def __call__(self, ind, conductivity, magnitude, seg_mask, local_mask_threshold):
         
         # prepare output
-        output = np.zeros(phase.shape, phase.dtype)
+        output = np.zeros(conductivity.shape, conductivity.dtype)
         
         # unpack
         idx_offset = self.idx_offset
                
         # actual integration
         for n in range(seg_mask.shape[0]):
-            PostProcessing._parallel_convolution(output, phase, seg_mask[n], ind[n], idx_offset)
+            PostProcessing._parallel_convolution(output, conductivity, magnitude, seg_mask[n], ind[n], idx_offset, local_mask_threshold)
         
         return output
       
     @staticmethod
     @nb.njit(fastmath=True, parallel=True)
-    def _parallel_convolution(output, phase, seg_mask, ind, idx_offset):
+    def _parallel_convolution(output, conductivity, magnitude, seg_mask, ind, idx_offset, local_mask_threshold):
                 
         # general fitting options
         nvoxels, _ = ind.shape
         
         # loop over voxels
         for n in nb.prange(nvoxels):
-            output[ind[n, 0], ind[n, 1], ind[n, 2]] = _local_median(ind[n], idx_offset, phase, seg_mask)
+            output[ind[n, 0], ind[n, 1], ind[n, 2]] = _local_median(ind[n], idx_offset, conductivity, magnitude, seg_mask, local_mask_threshold)
     
     
 @nb.njit(fastmath=True)
-def _local_median(idx, idx_offset, phase, seg_mask):
+def _local_median(idx, idx_offset, conductivity, magnitude, seg_mask, local_mask_threshold):
     
-    # get local phase
-    local_phase = _get_local_patch(phase, idx, idx_offset)
-            
+    # get local conductivity
+    local_conductivity = _get_local_patch(conductivity, idx, idx_offset)
+    
+    # get local magnitude and voxel magnitude
+    local_magnitude = _get_local_patch(magnitude, idx, idx_offset)
+        
+    # get magnitude difference        
+    voxel_magnitude = magnitude[idx[0], idx[1], idx[2]]
+    magnitude_diff = local_magnitude - voxel_magnitude
+                    
     # get local segmentation mask
     local_mask = _get_local_patch(seg_mask, idx, idx_offset)
     
-    # get weight   
-    local_phase = local_phase[local_mask]
+    # remove voxels with local magnitude difference >= 20%
+    local_mask *= (np.abs(magnitude_diff / voxel_magnitude) <= local_mask_threshold)
+    
+    # get conductivity within mask   
+    local_conductivity = local_conductivity[local_mask]
 
-    return np.median(local_phase)
+    return np.median(local_conductivity)
     
 
         

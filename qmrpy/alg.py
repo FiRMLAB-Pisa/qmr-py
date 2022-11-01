@@ -222,10 +222,10 @@ def transmit_field(input_path, output_path='./output', save_dicom=False, save_ni
 def phase_based_laplacian_ept(input_path, output_path='./output',
                               output_label = None,
                               save_dicom=False, save_nifti=False, 
-                              mask_path=None, mask_threshold=0.05, 
+                              mask_path=None, mask_threshold=0.05, local_mask_threshold=np.inf,
                               gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
                               laplacian_kernel_width=16, laplacian_kernel_shape='ellipsoid',
-                              nclasses=3,
+                              nclasses=3, merge_wm_csf=False,
                               median_filter_width=0, fft_shift_along_z=True):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
@@ -280,19 +280,27 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
             # get probabilistic segmentation
             segmentation, _ = io.read_segmentation(mask_path)
             
+            # merge CSF and WM (inner brain)
+            if merge_wm_csf is True:
+                segmentation_4_ept = np.stack([segmentation[0], segmentation[1] + segmentation[2]], axis=0)
+            else:
+                segmentation_4_ept = segmentation.copy()
+                    
             # get most probable tissue for each voxels
-            winner = (segmentation.sum(axis=0) > 0) * (segmentation.argmax(axis=0) + 1)
+            winner = (segmentation_4_ept.sum(axis=0) > 0) * (segmentation_4_ept.argmax(axis=0) + 1)
             
             # build binary mask
-            mask = np.zeros(segmentation.shape, dtype=bool)
+            mask = np.zeros(segmentation_4_ept.shape, dtype=bool)
             
-            for n in range(3):
+            for n in range(segmentation_4_ept.shape[0]):
                 mask[n][winner == n+1] = True
             
         elif mask_threshold > 0:
             mask = inference.utils.mask(img)
+            segmentation = None
         else:
             mask = None
+            segmentation = None
         
         # fix kernel width
         if isinstance(laplacian_kernel_width, (list, tuple)) is False:
@@ -307,7 +315,8 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
         conductivity_map, phase, laplacian = inference.PhaseBasedLaplacianEPT(img, resolution, omega0, 
                                                             gaussian_preprocessing_sigma, gaussian_weight_sigma,
                                                             laplacian_kernel_width, laplacian_kernel_shape,
-                                                            median_filter_width, mask, te, fft_shift_along_z)                            
+                                                            median_filter_width, mask, te, fft_shift_along_z,
+                                                            local_mask_threshold)                            
         pbar.update(step)
         
         if save_dicom:
