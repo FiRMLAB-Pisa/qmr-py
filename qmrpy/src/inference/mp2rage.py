@@ -15,7 +15,7 @@ import numpy as np
 __all__ = ['mp2rage_t1_fitting']
 
 
-def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversion_efficiency=0.96, sequence='mp2rage'):
+def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversion_efficiency=1.0, sequence='mp2rage'):
     """
     Calculate t2/t2* maps from multiecho spin echo / gradient echo data.
     

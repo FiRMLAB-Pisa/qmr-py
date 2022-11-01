@@ -490,7 +490,7 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, inpu
     return longitudinal_relaxation_map, uni_img
 
 
-def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_path, beta=0, output_path='./output', save_dicom=False, save_nifti=False):
+def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_path, inversion_efficiency=1.0, beta=0, output_path='./output', save_dicom=False, save_nifti=False):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
@@ -528,7 +528,7 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         pbar.update(step)
                     
         pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr_flash, tr, B0, beta, sequence='flaws')
+        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr_flash, tr, B0, beta, inversion_efficiency, sequence='flaws')
         pbar.update(step)
         
         # export wm suppressed image
