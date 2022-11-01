@@ -50,7 +50,7 @@ cli.add_command(longitudinal_relaxation)
 @click.option( '--save-nifti', default=True, show_default=True, help='save reconstructed map as NiFTI')
 @click.option( '--skip-first-echo', default=False, show_default=True, help='If true, discard first echo')
 @click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
-def transverse_relaxation(input_path, output_path, save_dicom, save_nifti, mask_threshold):
+def transverse_relaxation(input_path, output_path, save_dicom, save_nifti, skip_first_echo, mask_threshold):
     """
     Reconstruct quantitative T2 / T2* maps from Multi-Echo Spin-Echo / Gradient Echo data.
     
