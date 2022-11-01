@@ -16,13 +16,14 @@ from qmrpy.src.inference.LM import lmdif
 __all__ = ['me_transverse_relaxation_fitting']
 
 
-def me_transverse_relaxation_fitting(input: np.ndarray, te: float, mask: np.ndarray = None) -> np.ndarray:
+def me_transverse_relaxation_fitting(input: np.ndarray, te: float, skip_first_echo: bool = False, mask: np.ndarray = None) -> np.ndarray:
     """
     Calculate t2/t2* maps from multiecho spin echo / gradient echo data.
     
     Args:
         input (ndarray): magnitude data of size (nte, nz, ny, nx)
         te (ndarray): array of echo times [ms].
+        skup_first_echo (bool): if True, discard first echo (optional; default: False).
         mask (ndarray): binary mask to accelerate fitting (optional)
         
     Returns:
@@ -34,6 +35,11 @@ def me_transverse_relaxation_fitting(input: np.ndarray, te: float, mask: np.ndar
     # process input
     te = te.astype(np.float64)
     ishape = input.shape
+    
+    # discard echo
+    if skip_first_echo:
+        input = input[1:]
+        te = te[1:]
     
     if mask is not None:
         input = input[:, mask]

@@ -48,6 +48,7 @@ cli.add_command(longitudinal_relaxation)
 @click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
 @click.option( '--save-dicom', default=True, show_default=True, help='save reconstructed map as DICOM')
 @click.option( '--save-nifti', default=True, show_default=True, help='save reconstructed map as NiFTI')
+@click.option( '--skip-first-echo', default=False, show_default=True, help='If true, discard first echo')
 @click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
 def transverse_relaxation(input_path, output_path, save_dicom, save_nifti, mask_threshold):
     """
@@ -59,7 +60,7 @@ def transverse_relaxation(input_path, output_path, save_dicom, save_nifti, mask_
     
     where T2 is replaced by T2* for Gradient Echo data and TE is the Echo Time.
     """
-    alg.transverse_relaxation(input_path, output_path, save_dicom, save_nifti, mask_threshold)
+    alg.transverse_relaxation(input_path, output_path, save_dicom, save_nifti, skip_first_echo, mask_threshold)
 
     
 # wrap into command line

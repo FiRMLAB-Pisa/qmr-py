@@ -93,7 +93,7 @@ def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False
     return longitudinal_relaxation_map, img
 
     
-def transverse_relaxation(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
+def transverse_relaxation(input_path, output_path='./output', save_dicom=False, save_nifti=False, skip_first_echo=False, mask_threshold=0.05):
     """
     Reconstruct quantitative T2 / T2* maps from Multi-Echo Spin-Echo / Gradient Echo data.
     
@@ -139,7 +139,7 @@ def transverse_relaxation(input_path, output_path='./output', save_dicom=False, 
             mask = None
             
         pbar.set_description("computing transverse relaxation map...")
-        transverse_relaxation_map = inference.me_transverse_relaxation_fitting(img, te, mask)
+        transverse_relaxation_map = inference.me_transverse_relaxation_fitting(img, te, skip_first_echo, mask)
         pbar.update(step)
         
         if save_dicom:
