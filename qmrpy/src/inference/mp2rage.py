@@ -36,9 +36,7 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversio
         min (ndarray, optional): WM and CSF suppressed image for FLAWS.
         hc (ndarray, optional): High-Contrast image from FLAWS.
         hco (ndarray, optional): Reversed High-Contrast image from FLAWS (MP2RAGEuni-like).
-    """
-    print(inversion_efficiency)
-    
+    """    
     # preserve input
     input = np.abs(input.copy())
     nslices = input.shape[0]
