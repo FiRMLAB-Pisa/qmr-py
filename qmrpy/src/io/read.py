@@ -84,6 +84,9 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             - TR: ndarray of Repetition Times [ms].
             - FA: ndarray of Flip Angles [deg].
     """
+    nifti_files = [os.path.normpath(os.path.abspath(str(path))) for path in sorted(pathlib.Path(nifti_files).glob('*nii*'))]
+    if len(nifti_files) == 1:
+        nifti_files = nifti_files[0]
     if isinstance(nifti_files, (list, tuple)):
         
         # get file path
@@ -91,50 +94,62 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
                        if file.endswith('.nii') or file.endswith('.nii.gz')]
         file_path = nifti_files
         
+        # convert to array
+        nifti_files = np.array(nifti_files)
+        
         # check for complex images
-        try:        
-            # magnitude
-            try: 
-                idx = np.argwhere(np.array(['mag' in name for name in nifti_files])).squeeze()
-                img_mag = nib.load(nifti_files[idx])
-            except:
-                img_mag = None
-             
+        try:
             # phase
             try: 
                 idx = np.argwhere(np.array(['phase' in name for name in nifti_files])).squeeze()
-                img_phase = nib.load(nifti_files[idx])
+                files_phase = nifti_files[idx]
+                img_phase = [nib.load(file) for file in files_phase]
+                data_phase = np.stack([d.get_fdata() for d in img_phase], axis=-1).squeeze()
+                affine = img_phase[0].affine
+                header = img_phase[0].header
             except:
-                img_phase = None
+                img_phase = np.array([])
             
             # real
             try: 
                 idx = np.argwhere(np.array(['real' in name for name in nifti_files])).squeeze()
-                img_real = nib.load(nifti_files[idx])
+                files_real = nifti_files[idx]
+                img_real = [nib.load(file) for file in files_real]
+                data_real = np.stack([d.get_fdata() for d in img_real], axis=-1).squeeze()
+                affine = img_real[0].affine
+                header = img_real[0].header
             except:
-                img_real = None
+                files_real = np.array([])
              
             # imaginary
             try: 
                 idx = np.argwhere(np.array(['imag' in name for name in nifti_files])).squeeze()
-                img_imag = nib.load(nifti_files[idx])
+                files_imag = nifti_files[idx]
+                img_imag = [nib.load(file) for file in files_imag]
+                data_imag = np.stack([d.get_fdata() for d in img_imag], axis=-1).squeeze()
+                affine = img_imag[0].affine
+                header = img_imag[0].header
             except:
-                img_imag = None
+                img_imag = np.array([])
+                
+            # magnitude
+            tmp = np.concatenate((files_phase, files_real, files_imag)).tolist()
+            s = set(tmp)
+            files_mag = np.array([file for file in nifti_files if file not in s])
+            img_mag = [nib.load(file) for file in files_mag]
+            data_mag = np.stack([d.get_fdata() for d in img_mag], axis=-1).squeeze()
+            affine = img_mag[0].affine
+            header = img_mag[0].header
                 
             # assemble image
-            if img_mag is not None and img_phase is not None:
-                data = img_mag.get_fdata() * np.exp(1j * img_phase.get_fdata())
-                affine = img_mag.affine
-                header = img_mag.header
+            if files_mag.shape[0] != 0 and files_phase.shape[0] != 0:
+                scale = 2 * np.pi / 4095
+                offset = -np.pi
+                data = data_mag * np.exp(1j * scale * data_phase + offset)
                 
-            if img_real is not None and img_imag is not None:
-                data = img_real.get_fdata() + 1j * img_imag.get_fdata()
-                affine = img_real.affine
-                header = img_real.header
-                
-            # correct phase shift along z
-            data = np.flip(np.fft.fft(np.fft.fftshift(np.fft.fft(data, axis=-1), axes=-1), axis=-1), axis=-1)
-
+            if files_real.shape[0] != 0 and files_imag.shape[0] != 0:
+                data = data_real + 1j * data_imag
+                        
         except:
             img = [nib.load(file) for file in nifti_files]
             data = np.stack([d.get_fdata() for d in img], axis=-1)
@@ -207,7 +222,13 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             TR = TR[0]
         if len(FA) == 1:
             FA = FA[0]
-                                
+            
+        # fix fftshift along z
+        if np.iscomplexobj(data) and json_dict['Manufacturer'] == 'GE':
+            phase = np.angle(data)
+            phase[..., 1::2, :, :] = ((1e5 * (phase[..., 1::2, :, :] + 2 * np.pi)) % (2 * np.pi * 1e5)) / 1e5 - np.pi
+            data = np.abs(data) * np.exp(1j * phase)
+            
         return data, {'nifti_template': {'affine': affine, 'header': header, 'json': json_dict}, 'dcm_template': {}, 'B0': B0, 'EC': EC, 'TI': TI, 'TE': TE, 'TR': TR, 'FA': FA}
         
     except:

@@ -8,8 +8,11 @@ Created on Thu Feb 10 16:16:41 2022
 """
 import copy
 import multiprocessing
-from multiprocessing.dummy import Pool as ThreadPool
 import os
+import json
+
+
+from multiprocessing.dummy import Pool as ThreadPool
 from typing import Dict
 
 
@@ -140,7 +143,7 @@ def write_dicom(image: np.ndarray, info: Dict, series_description: str, outpath:
         pool.join()
     
     
-def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', outpath: str = './'):
+def write_nifti(image: np.ndarray, info: Dict, series_description: str = None, filename: str = 'output.nii', outpath: str = './'):
     """
     Write parametric map to dicom.
     
@@ -180,9 +183,14 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     if info['nifti_template']:
         affine = info['nifti_template']['affine']
         header = info['nifti_template']['header']
+        json_dict = info['nifti_template']['json']
         nifti = nib.Nifti1Image(image, affine, header)
         
     elif info['dcm_template']:
+        
+        # we do not have json dict in this case
+        json_dict = None
+        
         # get voxel size
         dx, dy = np.array(info['dcm_template'][0].PixelSpacing).round(4)
         dz = round(float(info['dcm_template'][0].SliceThickness), 4)
@@ -210,4 +218,14 @@ def write_nifti(image: np.ndarray, info: Dict, filename: str = 'output.nii', out
     
     # actual writing
     nib.save(nifti, os.path.join(outpath, filename))
+    
+    # write json
+    if json_dict is not None:
+        # fix series description
+        if series_description is not None:
+            json_dict['SeriesDescription'] = series_description
+        jsoname = filename.split('.')[0] + '.json'
+        with open(os.path.join(outpath, jsoname), 'w', encoding='utf-8') as f:
+            json.dump(json_dict, f, ensure_ascii=False, indent=4)
+    
     
