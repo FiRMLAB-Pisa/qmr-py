@@ -86,7 +86,7 @@ cli.add_command(transmit_field)
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of Double Angle SE or GRE data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
 def static_field(input_path, output_path, mask_threshold):
     """

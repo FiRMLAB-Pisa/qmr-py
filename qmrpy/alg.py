@@ -313,7 +313,7 @@ def static_field(input_path, output_path='./', mask_threshold=0.05):
             io.write_dicom(static_field_map, info, output_label + '_qb0', output_path + '_qb0')          
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(static_field_map, info, output_label + '_qb0', output_path + 'v')
+            io.write_nifti(static_field_map, info, output_label + '_qb0', output_path + '_qb0')
         pbar.update(step)
         
     t_end = time()
