@@ -93,7 +93,6 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
                 nifti_files = nifti_files[0]
     
     if isinstance(nifti_files, (list, tuple)):
-        
         # get file path
         nifti_files = [os.path.normpath(os.path.abspath(file)) for file in nifti_files 
                        if file.endswith('.nii') or file.endswith('.nii.gz')]
@@ -103,72 +102,66 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
         nifti_files = np.array(nifti_files)
         
         # check for complex images
-        try:
-            # phase
-            try: 
-                idx = np.argwhere(np.array(['phase' in name for name in nifti_files])).squeeze()
-                files_phase = nifti_files[idx]
-                if isinstance(files_phase, str):
-                    files_phase = np.array([files_phase])
-                img_phase = [nib.load(file) for file in files_phase]
-                data_phase = np.stack([d.get_fdata() for d in img_phase], axis=-1).squeeze()
-                affine = img_phase[0].affine
-                header = img_phase[0].header
-            except:
-                img_phase = np.array([])
-            
-            # real
-            try: 
-                idx = np.argwhere(np.array(['real' in name for name in nifti_files])).squeeze()
-                files_real = nifti_files[idx]
-                if isinstance(files_real, str):
-                    files_real = np.array([files_real])
-                img_real = [nib.load(file) for file in files_real]
-                data_real = np.stack([d.get_fdata() for d in img_real], axis=-1).squeeze()
-                affine = img_real[0].affine
-                header = img_real[0].header
-            except:
-                files_real = np.array([])
-             
-            # imaginary
-            try: 
-                idx = np.argwhere(np.array(['imag' in name for name in nifti_files])).squeeze()
-                files_imag = nifti_files[idx]
-                if isinstance(files_imag, str):
-                    files_imag = np.array([files_imag])
-                img_imag = [nib.load(file) for file in files_imag]
-                data_imag = np.stack([d.get_fdata() for d in img_imag], axis=-1).squeeze()
-                affine = img_imag[0].affine
-                header = img_imag[0].header
-            except:
-                img_imag = np.array([])
-                
-            # magnitude
-            tmp = np.concatenate((files_phase, files_real, files_imag)).tolist()
-            s = set(tmp)
-            files_mag = np.array([file for file in nifti_files if file not in s])
-            if isinstance(files_mag, str):
-                files_mag = np.array([files_mag])
-            img_mag = [nib.load(file) for file in files_mag]
-            data_mag = np.stack([d.get_fdata() for d in img_mag], axis=-1).squeeze()
-            affine = img_mag[0].affine
-            header = img_mag[0].header
-                
-            # assemble image
-            if files_mag.shape[0] != 0 and files_phase.shape[0] != 0:
-                scale = 2 * np.pi / 4095
-                offset = -np.pi
-                data = data_mag * np.exp(1j * scale * data_phase + offset)
-                
-            if files_real.shape[0] != 0 and files_imag.shape[0] != 0:
-                data = data_real + 1j * data_imag
-                        
+        # phase
+        try: 
+            idx = np.argwhere(np.array(['phase' in name for name in nifti_files])).squeeze()
+            files_phase = nifti_files[idx]
+            if isinstance(files_phase, str):
+                files_phase = np.array([files_phase])
+            img_phase = [nib.load(file) for file in files_phase]
+            data_phase = np.stack([d.get_fdata() for d in img_phase], axis=-1).squeeze()
+            affine = img_phase[0].affine
+            header = img_phase[0].header
         except:
-            img = [nib.load(file) for file in nifti_files]
-            data = np.stack([d.get_fdata() for d in img], axis=-1)
-            affine = img[0].affine
-            header = img[0].header
+            img_phase = np.array([])
+        
+        # real
+        try: 
+            idx = np.argwhere(np.array(['real' in name for name in nifti_files])).squeeze()
+            files_real = nifti_files[idx]
+            if isinstance(files_real, str):
+                files_real = np.array([files_real])
+            img_real = [nib.load(file) for file in files_real]
+            data_real = np.stack([d.get_fdata() for d in img_real], axis=-1).squeeze()
+            affine = img_real[0].affine
+            header = img_real[0].header
+        except:
+            files_real = np.array([])
+         
+        # imaginary
+        try: 
+            idx = np.argwhere(np.array(['imag' in name for name in nifti_files])).squeeze()
+            files_imag = nifti_files[idx]
+            if isinstance(files_imag, str):
+                files_imag = np.array([files_imag])
+            img_imag = [nib.load(file) for file in files_imag]
+            data_imag = np.stack([d.get_fdata() for d in img_imag], axis=-1).squeeze()
+            affine = img_imag[0].affine
+            header = img_imag[0].header
+        except:
+            img_imag = np.array([])
             
+        # magnitude
+        tmp = np.concatenate((files_phase, files_real, files_imag)).tolist()
+        s = set(tmp)
+        files_mag = np.array([file for file in nifti_files if file not in s])
+        if isinstance(files_mag, str):
+            files_mag = np.array([files_mag])
+        img_mag = [nib.load(file) for file in files_mag]
+        data = np.stack([d.get_fdata() for d in img_mag], axis=-1).squeeze()
+        affine = img_mag[0].affine
+        header = img_mag[0].header
+            
+        # assemble image
+        if files_mag.shape[0] != 0 and files_phase.shape[0] != 0:
+            scale = 2 * np.pi / 4095
+            offset = -np.pi
+            data = data * np.exp(1j * scale * data_phase + offset)
+            
+        if files_real.shape[0] != 0 and files_imag.shape[0] != 0:
+            data = data_real + 1j * data_imag
+            
+                    
     else:
         file_path = [os.path.normpath(os.path.abspath(nifti_files))]
         img = nib.load(file_path[0])
