@@ -531,12 +531,12 @@ def water_based_ept(input_path, output_path='./', anatomic_region='brain', units
        
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(conductivity, info, output_label + '_sigma', output_path + '_sigma')
+            io.write_dicom(1000 * conductivity, info, output_label + '_sigma', output_path + '_sigma')
             io.write_dicom(permittivity, info, output_label + '_epsilon', output_path + '_epsilon')        
 
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(conductivity, info, output_label + '_sigma', output_path + '_sigma')
+            io.write_nifti(1000 * conductivity, info, output_label + '_sigma', output_path + '_sigma')
             io.write_nifti(permittivity, info, output_label + '_epsilon', output_path + '_epsilon')   
             
         pbar.update(step)
