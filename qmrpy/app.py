@@ -88,8 +88,7 @@ cli.add_command(transmit_field)
 @click.option( '--input-path', required=True, help='location on disk of Double Angle SE or GRE data series in DICOM or NiFti format')
 @click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
 @click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
-@click.option( '--fix-phase-along-z', default=False, show_default=True, help='If needed, fix phase wrap along z.')
-def static_field(input_path, output_path, mask_threshold, fix_phase_along_z):
+def static_field(input_path, output_path, mask_threshold):
     """
     Reconstruct quantitative B0 maps from double echo Gradient Echo data.
     
@@ -98,7 +97,7 @@ def static_field(input_path, output_path, mask_threshold, fix_phase_along_z):
         s(t) = M0 * exp(1i * gamma * B0)
         
     """
-    alg.static_field(input_path, output_path, mask_threshold, fix_phase_along_z)
+    alg.static_field(input_path, output_path, mask_threshold)
     
 
 # wrap into command line
@@ -120,11 +119,10 @@ cli.add_command(static_field)
 @click.option( '--laplacian-kernel-width', default=16, show_default=True, help='Width of local parabolic phase fitting window (in [voxel])')
 @click.option( '--laplacian-kernel-shape', default='ellipsoid', show_default=True, help='Shape of the laplacian kernel (options are cross, cuboid and sigmoid)')
 @click.option( '--median-filter-width', default=0.05, show_default=True, help='Width of adaptive median filter  (in [voxel])')
-@click.option( '--fix-phase-along-z', default=False, show_default=True, help='If needed, fix phase wrap along z.')
 def phase_based_laplacian_ept(input_path, output_path, segmentation_path, n_tissue_classes, merge_wm_csf, mask_threshold, 
                               gaussian_preprocessing_sigma, gaussian_weight_sigma, 
                               laplacian_kernel_width, laplacian_kernel_shape, 
-                              median_filter_width, fix_phase_along_z):
+                              median_filter_width):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
     
@@ -137,7 +135,7 @@ def phase_based_laplacian_ept(input_path, output_path, segmentation_path, n_tiss
     alg.phase_based_laplacian_ept(input_path, output_path, segmentation_path, n_tissue_classes, merge_wm_csf, mask_threshold, 
                                   gaussian_preprocessing_sigma, gaussian_weight_sigma, 
                                   laplacian_kernel_width, laplacian_kernel_shape, 
-                                  median_filter_width, fix_phase_along_z)
+                                  median_filter_width)
     
     
 # wrap into command line

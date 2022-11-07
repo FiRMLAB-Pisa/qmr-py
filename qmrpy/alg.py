@@ -250,7 +250,7 @@ def transmit_field(input_path, output_path='./output', mask_threshold=0.05):
     return transmit_field_map
 
 
-def static_field(input_path, output_path='./output', mask_threshold=0.05, fix_phase_along_z=False):
+def static_field(input_path, output_path='./output', mask_threshold=0.05):
     """
     Reconstruct quantitative B0 maps from double echo Gradient Echo data.
     
@@ -305,28 +305,28 @@ def static_field(input_path, output_path='./output', mask_threshold=0.05, fix_ph
             mask = None
             
         pbar.set_description("computing transmit field magnitude map...")
-        transmit_field_map = inference.b0_multiecho_fitting(img, te, mask, fft_shift_along_z=fix_phase_along_z)
+        static_field_map = inference.b0_multiecho_fitting(img, te, mask)
         pbar.update(step)
         
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(transmit_field_map, info, output_label + '_qb0', output_path + '_qb0')          
+            io.write_dicom(static_field_map, info, output_label + '_qb0', output_path + '_qb0')          
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(transmit_field_map, info, output_label + '_qb0', output_path + 'v')
+            io.write_nifti(static_field_map, info, output_label + '_qb0', output_path + 'v')
         pbar.update(step)
         
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return transmit_field_map
+    return static_field_map
     
 
 def phase_based_laplacian_ept(input_path, output_path='./output',
                               segmentation_path=None, n_tissue_classes=3, merge_wm_csf=False, mask_threshold=0.05,
                               gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
                               laplacian_kernel_width=16, laplacian_kernel_shape='ellipsoid',
-                              median_filter_width=0, fix_phase_along_z=True):
+                              median_filter_width=0):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
     
@@ -424,7 +424,7 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
         conductivity_map, phase, laplacian = inference.PhaseBasedLaplacianEPT(img, resolution, omega0, 
                                                                               gaussian_preprocessing_sigma, gaussian_weight_sigma,
                                                                               laplacian_kernel_width, laplacian_kernel_shape,
-                                                                              median_filter_width, mask, te, fix_phase_along_z)                            
+                                                                              median_filter_width, mask, te)                            
         pbar.update(step)
         
         if save_dicom:
@@ -439,7 +439,7 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
-    return conductivity_map, img, phase, laplacian, segmentation
+    return conductivity_map
 
 
 def water_based_ept(input_path, output_path='./output', anatomic_region='brain', units='ms', t1_index=0):
@@ -539,6 +539,8 @@ def water_based_ept(input_path, output_path='./output', anatomic_region='brain',
 
     t_end = time()
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
+    
+    return conductivity, permittivity
     
     
 def mp2rage_longitudinal_relaxation(input_path, output_path='./output', inversion_times=None, tr_flash=None, flip_angles=None, inversion_efficiency=1.0, beta=0):
