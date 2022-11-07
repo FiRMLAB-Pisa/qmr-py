@@ -142,6 +142,7 @@ def PhaseBasedLaplacianEPT(input: np.ndarray, resolution: np.ndarray, omega0: fl
                 
     return conductivity, phase, laplacian
 
+
 def _PhaseBasedLaplacianEPT(phase, magnitude, segmentation, omega0, resolution=1, kernel_size=26, kernel_shape='cross', gauss_sigma=0.45, local_mask_threshold=np.inf):
     
     # check if  resolution is scalar
@@ -242,9 +243,7 @@ class DataReformat:
         for n in range(segmentation.shape[0]):
             i, j, k = np.argwhere(segmentation[n]).transpose()
             ind.append(np.stack([i, j, k], axis=-1))
-            
-        # ind = np.stack(ind, axis=0)
-        
+                    
         return phase, magnitude, segmentation, ind
     
     def reformat_data(self, input):

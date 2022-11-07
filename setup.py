@@ -17,7 +17,7 @@ install_requires = ["click==8.0.3",
                     "pydicom==2.2.2", 
                     "pytest==7.0.0", 
                     "scipy==1.7.3", 
-                    "scikit-image==0.19.3"
+                    "scikit-image==0.19.3",
                     "tqdm==4.62.3"]
 
 setuptools.setup(

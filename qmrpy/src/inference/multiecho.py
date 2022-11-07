@@ -84,15 +84,13 @@ class MultiechoTransverseRelaxationMapping:
         def signal_model(params, args):
         
             # calculate elements
-            arg = (params[0] * np.exp(-params[1] * args[0]))# + params[2]
+            arg = (params[0] * np.exp(-params[1] * args[0]))
             f = np.abs(arg) - args[1]
             
             # analytical jacobian
             Jf0 = np.sign(arg) * np.exp(-params[1] * args[0])
             Jf1 = np.sign(arg) * (-params[0] * args[0] * np.exp(-params[1] * args[0]))
-            # Jf2 = np.sign(arg)
 
-            # return f, np.stack((Jf0, Jf1, Jf2), axis=0)
             return f, np.stack((Jf0, Jf1), axis=0)
         
         return signal_model
@@ -104,7 +102,6 @@ class MultiechoTransverseRelaxationMapping:
         # general fitting options
         nvoxels, neqs = input.shape
         initial_guess = np.array([1.0, 1 / 50.0], input.dtype) # M0, T2
-        # initial_guess = np.array([1.0, 1 / 50.0, 0.0], input.dtype) # M0, T2, C
                 
         # loop over voxels
         for n in nb.prange(nvoxels):

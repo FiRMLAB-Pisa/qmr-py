@@ -23,14 +23,15 @@ from qmrpy import io, inference
 
 __all__ = ['longitudinal_relaxation', 
            'transverse_relaxation', 
-           'transmit_field', 
+           'transmit_field',
+           'static_field',
            'phase_based_laplacian_ept',
-           'phase_based_surface_integral_ept',
+           'water_based_ept',
            'mp2rage_longitudinal_relaxation', 
            'flaws_longitudinal_relaxation']
 
 
-def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
+def longitudinal_relaxation(input_path, output_path='./output', mask_threshold=0.05):
     """
     Reconstruct quantitative T1 maps from Inversion Recovery Spin-Echo data.
     
@@ -43,8 +44,7 @@ def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
-        rootdir = input_path[0].split(os.sep)[-2]
-        
+        rootdir = input_path[0].split(os.sep)[-2]        
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
@@ -68,6 +68,17 @@ def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False
         img, info = io.read_data(input_path)
         ti = info['TI']
         pbar.update(step)
+        
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
         
         # mask data
         if mask_threshold > 0:
@@ -93,7 +104,7 @@ def longitudinal_relaxation(input_path, output_path='./output', save_dicom=False
     return longitudinal_relaxation_map, img
 
     
-def transverse_relaxation(input_path, output_path='./output', save_dicom=False, save_nifti=False, skip_first_echo=False, mask_threshold=0.05):
+def transverse_relaxation(input_path, output_path='./output', skip_first_echo=False, mask_threshold=0.05):
     """
     Reconstruct quantitative T2 / T2* maps from Multi-Echo Spin-Echo / Gradient Echo data.
     
@@ -106,8 +117,7 @@ def transverse_relaxation(input_path, output_path='./output', save_dicom=False, 
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
-        rootdir = input_path[0].split(os.sep)[-2]
-        
+        rootdir = input_path[0].split(os.sep)[-2]        
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
@@ -131,6 +141,17 @@ def transverse_relaxation(input_path, output_path='./output', save_dicom=False, 
         img, info = io.read_data(input_path)
         te = info['TE']
         pbar.update(step)
+        
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
         
         # mask data
         if mask_threshold > 0:
@@ -156,7 +177,7 @@ def transverse_relaxation(input_path, output_path='./output', save_dicom=False, 
     return transverse_relaxation_map, img
     
 
-def transmit_field(input_path, output_path='./output', save_dicom=False, save_nifti=False, mask_threshold=0.05):
+def transmit_field(input_path, output_path='./output', mask_threshold=0.05):
     """
     Reconstruct quantitative B1+ maps from Double Angle Spin-Echo / Gradient Echo data.
     
@@ -169,8 +190,7 @@ def transmit_field(input_path, output_path='./output', save_dicom=False, save_ni
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
-        rootdir = input_path[0].split(os.sep)[-2]
-        
+        rootdir = input_path[0].split(os.sep)[-2]       
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
@@ -195,6 +215,17 @@ def transmit_field(input_path, output_path='./output', save_dicom=False, save_ni
         fa = info['FA']
         pbar.update(step)
         
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
+        
         # mask data
         if mask_threshold > 0:
             mask = inference.utils.mask(img)
@@ -217,16 +248,84 @@ def transmit_field(input_path, output_path='./output', save_dicom=False, save_ni
     click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
     
     return transmit_field_map
+
+
+def static_field(input_path, output_path='./output', mask_threshold=0.05, fix_phase_along_z=False):
+    """
+    Reconstruct quantitative B0 maps from double echo Gradient Echo data.
+    
+    Use the following signal model:
+        
+        s(t) = M0 * exp(1i * gamma * B0)
+        """
+    # check input
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]       
+    elif input_path.endswith('/') or input_path.endswith('\\'):
+        folders = sorted(os.listdir(input_path))
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
+            
+    click.echo("starting processing...")
+    t_start = time()
+    
+    # progress bar step size
+    step = 1
+    
+    with tqdm(total=3) as pbar:
+        pbar.set_description("loading input data...")
+        img, info = io.read_data(input_path)
+        te = info['TE']
+        pbar.update(step)
+        
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
+        
+        # mask data
+        if mask_threshold > 0:
+            mask = inference.utils.mask(img)
+        else:
+            mask = None
+            
+        pbar.set_description("computing transmit field magnitude map...")
+        transmit_field_map = inference.b0_multiecho_fitting(img, te, mask, fft_shift_along_z=fix_phase_along_z)
+        pbar.update(step)
+        
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(transmit_field_map, info, output_label + '_qb0', output_path + '_qb0')          
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(transmit_field_map, info, output_label + '_qb0', output_path + 'v')
+        pbar.update(step)
+        
+    t_end = time()
+    click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
+    
+    return transmit_field_map
     
 
 def phase_based_laplacian_ept(input_path, output_path='./output',
-                              output_label = None,
-                              save_dicom=False, save_nifti=False, 
-                              mask_path=None, mask_threshold=0.05, local_mask_threshold=np.inf,
+                              segmentation_path=None, n_tissue_classes=3, merge_wm_csf=False, mask_threshold=0.05,
                               gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
                               laplacian_kernel_width=16, laplacian_kernel_shape='ellipsoid',
-                              nclasses=3, merge_wm_csf=False,
-                              median_filter_width=0, fft_shift_along_z=True):
+                              median_filter_width=0, fix_phase_along_z=True):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
     
@@ -239,8 +338,7 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
-        rootdir = input_path[0].split(os.sep)[-2]
-        
+        rootdir = input_path[0].split(os.sep)[-2]       
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
@@ -250,9 +348,8 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
         rootdir = input_path.split(os.sep)[-1]
         
     # get output
-    if output_label is None:
-        output_label = rootdir
-        output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
+    output_label = rootdir
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
             
     click.echo("starting processing...")
     t_start = time()
@@ -263,6 +360,17 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
         img, info = io.read_data(input_path)
+        
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
         
         # get info
         if info['dcm_template']:
@@ -275,10 +383,10 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
         pbar.update(step)
         
         # mask data
-        if mask_path is not None:
+        if segmentation_path is not None:
             
             # get probabilistic segmentation
-            segmentation, _ = io.read_segmentation(mask_path)
+            segmentation, _ = io.read_segmentation(segmentation_path, n_tissue_classes)
             
             # merge CSF and WM (inner brain)
             if merge_wm_csf is True:
@@ -313,10 +421,9 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
             
         pbar.set_description("computing conductivity map...")
         conductivity_map, phase, laplacian = inference.PhaseBasedLaplacianEPT(img, resolution, omega0, 
-                                                            gaussian_preprocessing_sigma, gaussian_weight_sigma,
-                                                            laplacian_kernel_width, laplacian_kernel_shape,
-                                                            median_filter_width, mask, te, fft_shift_along_z,
-                                                            local_mask_threshold)                            
+                                                                              gaussian_preprocessing_sigma, gaussian_weight_sigma,
+                                                                              laplacian_kernel_width, laplacian_kernel_shape,
+                                                                              median_filter_width, mask, te, fix_phase_along_z)                            
         pbar.update(step)
         
         if save_dicom:
@@ -334,15 +441,113 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
     return conductivity_map, img, phase, laplacian, segmentation
 
 
-def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, input_path, output_path='./output', save_dicom=False, save_nifti=False):
+def water_based_ept(input_path, output_path='./output', anatomic_region='brain', units='ms', t1_index=0):
+    """ 
+    Reconstruct electric properties maps from quantitative T1 map.
+    
+    First, a water concentration map is estimated from the T1 map according to [1]:
+        
+        - 1/water_map = A + B/t1_map
+
+    Then, water concentration map is used to compute electric properties,    
+    assuming the following relations between water concentration and tissue 
+    conductivity and relative permittivity [2]:
+        
+        - \sigma = c_1 + c_2 * exp(c_3 * W)
+        - \epsilon_r = p_1 * W^2 + p_2 * W + p3
+    
+    where sigma is the conductivityty, W the percentage
+    water concentration and c_i the model coefficients [1].
+
+    References:
+        1. Fatouros PP, Marmarou A. 
+        Use of magnetic resonance imaging for in vivo measurements 
+        of water content in human brain: method and normal values. 
+        J Neurosurg. 1999 Jan;90(1):109-15. 
+        doi: 10.3171/jns.1999.90.1.0109. PMID: 10413163.
+        
+        2. Michel, E., Hernandez, D. and Lee, S.Y. (2017), 
+        Electrical conductivity and permittivity maps of brain tissues 
+        derived from water content based on T1-weighted acquisition. 
+        Magn. Reson. Med., 77: 1094-1103. 
+        https://doi.org/10.1002/mrm.261    
+    """
+    # check input
+    if isinstance(input_path, (list, tuple)):
+        input_path = [os.path.abspath(path) for path in input_path]
+        rootdir = input_path[0].split(os.sep)[-2]       
+    elif input_path.endswith('/') or input_path.endswith('\\'):
+        folders = sorted(os.listdir(input_path))
+        input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
+        rootdir = input_path[0].split(os.sep)[-2]
+    else:
+        input_path = os.path.abspath(input_path)
+        rootdir = input_path.split(os.sep)[-1]
+        
+    # get output
+    output_label = rootdir
+    output_path = os.path.normpath(os.path.abspath(os.path.join(output_path, rootdir)))
+            
+    click.echo("starting processing...")
+    t_start = time()
+    
+    # progress bar step size
+    step = 1
+    
+    with tqdm(total=3) as pbar:
+        pbar.set_description("loading input data...")
+        img, info = io.read_data(input_path)
+        B0 = info['B0']
+        pbar.update(step)
+        
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
+        
+        # get t1 map
+        if len(img.shape) == 4:
+            img = img[t1_index]
+            
+        # convert to ms
+        if units == 's':
+            img *= 1000
+
+        # do reconstruction
+        pbar.set_description("computing dielectric properties...")
+        conductivity, permittivity = inference.water_ept_fitting(img, B0, anatomic_region)
+        pbar.update(step)
+       
+        if save_dicom:
+            pbar.set_description("saving output dicom to disk...")
+            io.write_dicom(conductivity, info, output_label + '_sigma', output_path + '_sigma')
+            io.write_dicom(permittivity, info, output_label + '_epsilon', output_path + '_epsilon')        
+
+        if save_nifti:
+            pbar.set_description("saving output nifti to disk...")
+            io.write_nifti(conductivity, info, output_label + '_sigma', output_path + '_sigma')
+            io.write_nifti(permittivity, info, output_label + '_epsilon', output_path + '_epsilon')   
+            
+        pbar.update(step)
+
+    t_end = time()
+    click.echo("reconstruction done! Elapsed time: " + str(timedelta(seconds=(t_end-t_start))))
+    
+    
+def mp2rage_longitudinal_relaxation(input_path, output_path='./output', inversion_times=None, tr_flash=None, flip_angles=None, inversion_efficiency=1.0, beta=0):
     """
     Reconstruct quantitative T1 maps from MP2RAGEDATA data.
     """
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
-        rootdir = input_path[0].split(os.sep)[-2]
-        
+        rootdir = input_path[0].split(os.sep)[-2]        
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
@@ -369,9 +574,20 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, inpu
         tr = np.asarray(tr_flash, dtype=np.float64)
         B0 = info['B0']
         pbar.update(step)
+        
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
                     
         pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map, uni_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0)
+        longitudinal_relaxation_map, uni_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0, beta, inversion_efficiency)
         pbar.update(step)
         
         # export unified image
@@ -397,15 +613,14 @@ def mp2rage_longitudinal_relaxation(inversion_times, tr_flash, flip_angles, inpu
     return longitudinal_relaxation_map, uni_img
 
 
-def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_path, inversion_efficiency=1.0, beta=0, output_path='./output', save_dicom=False, save_nifti=False):
+def flaws_longitudinal_relaxation(input_path, output_path='./output', inversion_times=None, flip_angles=None, tr_flash=None, inversion_efficiency=1.0, beta=0):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
-        rootdir = input_path[0].split(os.sep)[-2]
-        
+        rootdir = input_path[0].split(os.sep)[-2]        
     elif input_path.endswith('/') or input_path.endswith('\\'):
         folders = sorted(os.listdir(input_path))
         input_path = [os.path.normpath(os.path.abspath(os.path.join(input_path, folder))) for folder in folders]
@@ -433,6 +648,17 @@ def flaws_longitudinal_relaxation(inversion_times, flip_angles, tr_flash, input_
         tr = info['TR'][0]
         B0 = info['B0']
         pbar.update(step)
+        
+        # detect dicom or nifti
+        if info['dicom_template']:
+            save_dicom = True
+        else:
+            save_dicom = False
+            
+        if info['nifti_template']:
+            save_nifti = True
+        else:
+            save_nifti = False
                     
         pbar.set_description("computing longitudinal relaxation map...")
         longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr_flash, tr, B0, beta, inversion_efficiency, sequence='flaws')
