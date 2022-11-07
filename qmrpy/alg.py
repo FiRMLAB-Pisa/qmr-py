@@ -250,7 +250,7 @@ def transmit_field(input_path, output_path='./', mask_threshold=0.05):
     return transmit_field_map
 
 
-def static_field(input_path, output_path='./', mask_threshold=0.05):
+def static_field(input_path, output_path='./', mask_threshold=0.05, fix_phase_along_z=False):
     """
     Reconstruct quantitative B0 maps from double echo Gradient Echo data.
     
@@ -305,7 +305,7 @@ def static_field(input_path, output_path='./', mask_threshold=0.05):
             mask = None
             
         pbar.set_description("computing static field map...")
-        static_field_map, _ = inference.b0_multiecho_fitting(img, te, mask)
+        static_field_map, _ = inference.b0_multiecho_fitting(img, te, mask, fft_shift_along_z=fix_phase_along_z)
         pbar.update(step)
         
         if save_dicom:
@@ -326,7 +326,7 @@ def phase_based_laplacian_ept(input_path, output_path='./',
                               segmentation_path=None, n_tissue_classes=3, merge_wm_csf=False, mask_threshold=0.05,
                               gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
                               laplacian_kernel_width=16, laplacian_kernel_shape='ellipsoid',
-                              median_filter_width=0):
+                              median_filter_width=0, fix_phase_along_z=False):
     """
     Reconstruct quantitative conductivity maps from bSSFP data.
     
@@ -428,7 +428,7 @@ def phase_based_laplacian_ept(input_path, output_path='./',
         conductivity_map, phase, laplacian = inference.PhaseBasedLaplacianEPT(img, resolution, omega0, 
                                                                               gaussian_preprocessing_sigma, gaussian_weight_sigma,
                                                                               laplacian_kernel_width, laplacian_kernel_shape,
-                                                                              median_filter_width, mask, te)                            
+                                                                              median_filter_width, mask, te, fix_phase_along_z)                            
         pbar.update(step)
         
         if save_dicom:
