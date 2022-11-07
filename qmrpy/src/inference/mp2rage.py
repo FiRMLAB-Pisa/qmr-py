@@ -275,11 +275,10 @@ class MP2RAGE:
             
         # get unified signal
         intensity = (signal[0] * signal[1].conj()).real / (np.abs(signal[0]**2) + np.abs(signal[1]**2))
-        if strategy == 'hc':
-            uni_signal = intensity
-            _, hc_signal = MP2RAGE.hc_image(signal[0], signal[1], uni_signal)
+        uni_signal = intensity
+        _, hc_signal = MP2RAGE.hc_image(signal[0], signal[1], uni_signal)
         
-        else:
+        if strategy != 'hc':
             # get monotonic part
             minindex = np.argmax(np.abs(hc_signal))
             maxindex = np.argmin(np.abs(hc_signal))
