@@ -304,7 +304,7 @@ def static_field(input_path, output_path='./', mask_threshold=0.05):
         else:
             mask = None
             
-        pbar.set_description("computing transmit field magnitude map...")
+        pbar.set_description("computing static field map...")
         static_field_map, _ = inference.b0_multiecho_fitting(img, te, mask)
         pbar.update(step)
         

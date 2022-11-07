@@ -44,7 +44,7 @@ mu0 = 4.0e-7 * np.pi
 # Vacuum permeability [F/m].
 eps0 = 1.0 / mu0 / c0**2
 
-# gyromagnetic factor [MHz/T]
+# gyromagnetic factor [Hz/T]
 gamma = 64e6 / 1.5
 
 # T1 to water content converter ([1] for A,B @3T; [2] for A,B @1.5T, @7T: computed from literature T1 values in https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6590660/pdf/HBM-40-1786.pdf)
