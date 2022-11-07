@@ -1,25 +1,11 @@
 # QMR-Py
 Lightweight library for MR parameter mapping from scanner-reconstructed contrast-weighted images.
 
-
-
-## Pre-requisites
-
-Requires Python >= 3.7 and a Fortran compiler. For example:
-
-- For Windows: [MinGW](https://gcc.gnu.org/wiki/GFortranBinaries)
-
-- For Linux: 
-
-  ```bash
-  sudo apt-get install gcc libgcc-7-dev gfortran g++
-  ```
-
 ## Installation
 
-After pre-requisites are satisfied:
+Installation can be performed in two steps:
 
-1.  Clone the repository: 
+1.  Clone or download the repository: 
 
    ```bash
    git clone git@github.com:FiRMLAB-Pisa/qmr-py.git
@@ -28,7 +14,7 @@ After pre-requisites are satisfied:
 2. From repository top folder:
 
    ```bash
-   pip install -e .
+   pip install .
    ```
 
 ## Usage
@@ -39,3 +25,4 @@ We provide a Command Line Interface. For documentation type:
 qmri --help
 ```
 
+For usage examples, see 'tutorial' folder.
