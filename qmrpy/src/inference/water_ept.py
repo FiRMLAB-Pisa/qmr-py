@@ -308,7 +308,7 @@ def _get_complex_dielectric_properties(field_strength, anatomic_region):
     return dielectric_properties
     
 
-def T1 (t1map, field_strength=1.5):
+def _convert_t1_map_to_water_map(t1map, field_strength=1.5):
     """ Convert T1 map [ms] to water content map [%].
     
     Assume the following relation between T1 and water concentration [2]:
