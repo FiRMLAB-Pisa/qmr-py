@@ -47,13 +47,13 @@ eps0 = 1.0 / mu0 / c0**2
 # gyromagnetic factor [MHz/T]
 gamma = 64e6 / 1.5
 
-# T1 to water content converter ([1] for A,B @3T; [2] for A,B @1.5T)
+# T1 to water content converter ([1] for A,B @3T; [2] for A,B @1.5T, @7T: computed from literature T1 values in https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6590660/pdf/HBM-40-1786.pdf)
 water_lut = {'1.5': {'A': 0.935, 'B': 0.341},
              '3': {'A': 0.89, 'B': 0.50},
-             '7': {'A': None, 'B': None}}
+             '7': {'A': 0.93, 'B': 0.62}}
 
-# Tabulated water contents [%] (source: [1])
-literature_water = {'wm': 69.57, 'gm': 83.41, 'csf': 98.8}
+# Tabulated water contents [%] (source: https://www.sciencedirect.com/science/article/pii/S1053811922001434)
+literature_water = {'wm': 69.0, 'gm': 80.0, 'csf': 100.0}
 
 # 4 Cole-Cole model parameters (N De Geeter et al 2012 Phys. Med. Biol. 57 2169)
 brain_params = {'wm': {'epsInf': 4.0,
@@ -308,7 +308,7 @@ def _get_complex_dielectric_properties(field_strength, anatomic_region):
     return dielectric_properties
     
 
-def _convert_t1_map_to_water_map(t1map, field_strength=1.5):
+def T1 (t1map, field_strength=1.5):
     """ Convert T1 map [ms] to water content map [%].
     
     Assume the following relation between T1 and water concentration [2]:

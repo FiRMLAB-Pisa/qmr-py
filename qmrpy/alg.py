@@ -257,7 +257,8 @@ def static_field(input_path, output_path='./output', mask_threshold=0.05, fix_ph
     Use the following signal model:
         
         s(t) = M0 * exp(1i * gamma * B0)
-        """
+        
+    """
     # check input
     if isinstance(input_path, (list, tuple)):
         input_path = [os.path.abspath(path) for path in input_path]
