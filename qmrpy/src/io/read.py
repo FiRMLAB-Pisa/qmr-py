@@ -84,9 +84,12 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             - TR: ndarray of Repetition Times [ms].
             - FA: ndarray of Flip Angles [deg].
     """
-    nifti_files = [os.path.normpath(os.path.abspath(str(path))) for path in sorted(pathlib.Path(nifti_files).glob('*nii*'))]
-    if len(nifti_files) == 1:
-        nifti_files = nifti_files[0]
+    if isinstance(nifti_files, str):
+        if nifti_files.endswith('.nii') or nifti_files.endswith('.nii.gz'):
+            pass
+        else:
+            nifti_files = [os.path.normpath(os.path.abspath(str(path))) for path in sorted(pathlib.Path(nifti_files).glob('*nii*'))]
+            
     if isinstance(nifti_files, (list, tuple)):
         
         # get file path
