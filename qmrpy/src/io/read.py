@@ -108,6 +108,8 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             try: 
                 idx = np.argwhere(np.array(['phase' in name for name in nifti_files])).squeeze()
                 files_phase = nifti_files[idx]
+                if isinstance(files_phase, str):
+                    files_phase = np.array([files_phase])
                 img_phase = [nib.load(file) for file in files_phase]
                 data_phase = np.stack([d.get_fdata() for d in img_phase], axis=-1).squeeze()
                 affine = img_phase[0].affine
@@ -119,6 +121,8 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             try: 
                 idx = np.argwhere(np.array(['real' in name for name in nifti_files])).squeeze()
                 files_real = nifti_files[idx]
+                if isinstance(files_real, str):
+                    files_real = np.array([files_real])
                 img_real = [nib.load(file) for file in files_real]
                 data_real = np.stack([d.get_fdata() for d in img_real], axis=-1).squeeze()
                 affine = img_real[0].affine
@@ -130,6 +134,8 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             try: 
                 idx = np.argwhere(np.array(['imag' in name for name in nifti_files])).squeeze()
                 files_imag = nifti_files[idx]
+                if isinstance(files_imag, str):
+                    files_imag = np.array([files_imag])
                 img_imag = [nib.load(file) for file in files_imag]
                 data_imag = np.stack([d.get_fdata() for d in img_imag], axis=-1).squeeze()
                 affine = img_imag[0].affine
@@ -141,6 +147,8 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             tmp = np.concatenate((files_phase, files_real, files_imag)).tolist()
             s = set(tmp)
             files_mag = np.array([file for file in nifti_files if file not in s])
+            if isinstance(files_mag, str):
+                files_mag = np.array([files_mag])
             img_mag = [nib.load(file) for file in files_mag]
             data_mag = np.stack([d.get_fdata() for d in img_mag], axis=-1).squeeze()
             affine = img_mag[0].affine
