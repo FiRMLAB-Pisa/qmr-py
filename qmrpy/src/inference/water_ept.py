@@ -327,7 +327,7 @@ def _convert_t1_map_to_water_map(t1map, field_strength=1.5):
         A = water_lut[str(field_strength)]['A']
         B = water_lut[str(field_strength)]['B']
     except:
-        print('Field strength not available!')
+        print(f'Field strength (={field_strength} T) not available!')
 
     # calculate water map as [2]
     water_map_inv = A + B / (t1map / 1000.0) # ms -> s
