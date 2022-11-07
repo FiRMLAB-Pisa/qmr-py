@@ -70,7 +70,7 @@ def longitudinal_relaxation(input_path, output_path='./output', mask_threshold=0
         pbar.update(step)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
@@ -143,7 +143,7 @@ def transverse_relaxation(input_path, output_path='./output', skip_first_echo=Fa
         pbar.update(step)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
@@ -216,7 +216,7 @@ def transmit_field(input_path, output_path='./output', mask_threshold=0.05):
         pbar.update(step)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
@@ -288,7 +288,7 @@ def static_field(input_path, output_path='./output', mask_threshold=0.05, fix_ph
         pbar.update(step)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
@@ -363,7 +363,7 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
         img, info = io.read_data(input_path)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
@@ -502,7 +502,7 @@ def water_based_ept(input_path, output_path='./output', anatomic_region='brain',
         pbar.update(step)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
@@ -577,7 +577,7 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./output', inversio
         pbar.update(step)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
@@ -651,7 +651,7 @@ def flaws_longitudinal_relaxation(input_path, output_path='./output', inversion_
         pbar.update(step)
         
         # detect dicom or nifti
-        if info['dicom_template']:
+        if info['dcm_template']:
             save_dicom = True
         else:
             save_dicom = False
