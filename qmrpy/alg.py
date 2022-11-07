@@ -411,10 +411,14 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
             mask = None
             segmentation = None
         
-        # fix kernel width
+        # fix scalar width
         if isinstance(laplacian_kernel_width, (list, tuple)) is False:
             if mask is not None and len(mask.shape) == 4:
                 laplacian_kernel_width = mask.shape[0] * [laplacian_kernel_width]
+                
+        if isinstance(gaussian_weight_sigma, (list, tuple)) is False:
+            if mask is not None and len(mask.shape) == 4:
+                gaussian_weight_sigma = mask.shape[0] * [gaussian_weight_sigma]
                 
         if isinstance(median_filter_width, (list, tuple)) is False:
             if mask is not None and len(mask.shape) == 4:
