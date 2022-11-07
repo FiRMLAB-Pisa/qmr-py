@@ -31,7 +31,7 @@ __all__ = ['longitudinal_relaxation',
            'flaws_longitudinal_relaxation']
 
 
-def longitudinal_relaxation(input_path, output_path='./output', mask_threshold=0.05):
+def longitudinal_relaxation(input_path, output_path='./', mask_threshold=0.05):
     """
     Reconstruct quantitative T1 maps from Inversion Recovery Spin-Echo data.
     
@@ -104,7 +104,7 @@ def longitudinal_relaxation(input_path, output_path='./output', mask_threshold=0
     return longitudinal_relaxation_map, img
 
     
-def transverse_relaxation(input_path, output_path='./output', skip_first_echo=False, mask_threshold=0.05):
+def transverse_relaxation(input_path, output_path='./', skip_first_echo=False, mask_threshold=0.05):
     """
     Reconstruct quantitative T2 / T2* maps from Multi-Echo Spin-Echo / Gradient Echo data.
     
@@ -177,7 +177,7 @@ def transverse_relaxation(input_path, output_path='./output', skip_first_echo=Fa
     return transverse_relaxation_map, img
     
 
-def transmit_field(input_path, output_path='./output', mask_threshold=0.05):
+def transmit_field(input_path, output_path='./', mask_threshold=0.05):
     """
     Reconstruct quantitative B1+ maps from Double Angle Spin-Echo / Gradient Echo data.
     
@@ -250,7 +250,7 @@ def transmit_field(input_path, output_path='./output', mask_threshold=0.05):
     return transmit_field_map
 
 
-def static_field(input_path, output_path='./output', mask_threshold=0.05):
+def static_field(input_path, output_path='./', mask_threshold=0.05):
     """
     Reconstruct quantitative B0 maps from double echo Gradient Echo data.
     
@@ -322,7 +322,7 @@ def static_field(input_path, output_path='./output', mask_threshold=0.05):
     return static_field_map
     
 
-def phase_based_laplacian_ept(input_path, output_path='./output',
+def phase_based_laplacian_ept(input_path, output_path='./',
                               segmentation_path=None, n_tissue_classes=3, merge_wm_csf=False, mask_threshold=0.05,
                               gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
                               laplacian_kernel_width=16, laplacian_kernel_shape='ellipsoid',
@@ -446,7 +446,7 @@ def phase_based_laplacian_ept(input_path, output_path='./output',
     return conductivity_map
 
 
-def water_based_ept(input_path, output_path='./output', anatomic_region='brain', units='ms', t1_index=0):
+def water_based_ept(input_path, output_path='./', anatomic_region='brain', units='ms', t1_index=0):
     """ 
     Reconstruct electric properties maps from quantitative T1 map.
     
@@ -547,7 +547,7 @@ def water_based_ept(input_path, output_path='./output', anatomic_region='brain',
     return conductivity, permittivity
     
     
-def mp2rage_longitudinal_relaxation(input_path, output_path='./output', inversion_times=None, tr_flash=None, flip_angles=None, inversion_efficiency=1.0, beta=0):
+def mp2rage_longitudinal_relaxation(input_path, output_path='./', inversion_times=None, tr_flash=None, flip_angles=None, inversion_efficiency=1.0, beta=0):
     """
     Reconstruct quantitative T1 maps from MP2RAGEDATA data.
     """
@@ -620,7 +620,7 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./output', inversio
     return longitudinal_relaxation_map, uni_img
 
 
-def flaws_longitudinal_relaxation(input_path, output_path='./output', inversion_times=None, flip_angles=None, tr_flash=None, inversion_efficiency=1.0, beta=0):
+def flaws_longitudinal_relaxation(input_path, output_path='./', inversion_times=None, flip_angles=None, tr_flash=None, inversion_efficiency=1.0, beta=0):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """

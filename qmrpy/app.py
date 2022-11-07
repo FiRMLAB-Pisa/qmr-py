@@ -22,7 +22,7 @@ def cli():
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of Inversion Recovery SE data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
 def longitudinal_relaxation(input_path, output_path, mask_threshold):
     """
@@ -43,7 +43,7 @@ cli.add_command(longitudinal_relaxation)
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of Multi-Echo SE or GRE data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--skip-first-echo', default=False, show_default=True, help='If true, discard first echo')
 @click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
 def transverse_relaxation(input_path, output_path, skip_first_echo, mask_threshold):
@@ -65,7 +65,7 @@ cli.add_command(transverse_relaxation)
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of Double Angle SE or GRE data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--mask-threshold', default=0.05, show_default=True, help='Threshold to mask input data')
 def transmit_field(input_path, output_path, mask_threshold):
     """
@@ -106,7 +106,7 @@ cli.add_command(static_field)
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of bSSFP data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--segmentation-path', default=None, show_default=True, 
               help="""Use external tissue segmentation (stored in --segmentation-path=/path/to/segmentation/Segmentation.nii) to condition fit. 
                       Assumes segmentation is done with SPM and will search for /path/to/segmentation/cnSegmentation.nii'), with cn = c1, c2, c3,...
@@ -130,7 +130,7 @@ def phase_based_laplacian_ept(input_path, output_path, segmentation_path, n_tiss
         
         s(t) = - Nabla Phi / Phi / (omega0 * mu0)
     
-    where Phi is bSSFP phase, omega0 is the larmor frequency and mu0 is the vacuum permittivity.
+    where Phi is bSSFP phase, omega0 is the Larmor frequency and mu0 is the vacuum permittivity.
     """
     alg.phase_based_laplacian_ept(input_path, output_path, segmentation_path, n_tissue_classes, merge_wm_csf, mask_threshold, 
                                   gaussian_preprocessing_sigma, gaussian_weight_sigma, 
@@ -144,7 +144,7 @@ cli.add_command(phase_based_laplacian_ept)
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of bSSFP data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--anatomic-region', default='brain', show_default=True, help='Anatomical region corresponding to acquisition')
 @click.option( '--units', default='ms', show_default='ms', help='Units of the input T1 map')
 @click.option( '--t1-index', default=0, show_default=True, help='For multi-parametric input, index corresponding to T1 map')
@@ -152,13 +152,13 @@ def water_based_ept(input_path, output_path, anatomic_region, units, t1_index):
     """
     Reconstruct electric properties maps from quantitative T1 map.
     
-    First, a water concentration map is estimated from the T1 map according to [1]:
+    First, a water concentration map is estimated from the T1 map according to:
         
         - 1/water_map = A + B/t1_map
 
     Then, water concentration map is used to compute electric properties,    
     assuming the following relations between water concentration and tissue 
-    conductivity and relative permittivity [2]:
+    conductivity and relative permittivity:
         
         - \sigma = c_1 + c_2 * exp(c_3 * W)
         - \epsilon_r = p_1 * W^2 + p_2 * W + p3
@@ -175,7 +175,7 @@ cli.add_command(water_based_ept)
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of MP2RAGE data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--inversion-times', '-ti', multiple=True, required=True, help='MP2RAGE inversion times for the two volumes in [ms]')
 @click.option( '--tr-flash', '-tr', multiple=True, required=True, help='FLASH readouts repetition time(s) [ms]')
 @click.option( '--flip-angles', '-fa', multiple=True, required=True, help='FLASH readouts flip angle(s) [deg]')
@@ -194,7 +194,7 @@ cli.add_command(mp2rage_longitudinal_relaxation)
 
 @click.command()
 @click.option( '--input-path', required=True, help='location on disk of FLAWS data series in DICOM or NiFti format')
-@click.option( '--output-path', default='./output', show_default=True, help='path for the stored output')
+@click.option( '--output-path', default='./', show_default=True, help='path for the stored output')
 @click.option( '--inversion-times', '-ti', multiple=True, required=True, help='FLAWS inversion times for the two volumes in [ms]')
 @click.option( '--flip-angles', '-fa', multiple=True, required=True, help='FLASH readouts flip angle(s) [deg]')
 @click.option( '--tr-flash', '-tr', required=True, help='FLASH readouts repetition time(s) [ms]')
