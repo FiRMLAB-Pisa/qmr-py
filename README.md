@@ -25,4 +25,4 @@ We provide a Command Line Interface. For documentation type:
 qmri --help
 ```
 
-For usage examples, see 'tutorial' folder.
+Coming soon: documentation and tutorials.
