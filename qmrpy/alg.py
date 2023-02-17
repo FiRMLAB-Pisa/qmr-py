@@ -31,7 +31,7 @@ __all__ = ['longitudinal_relaxation',
            'flaws_longitudinal_relaxation']
 
 
-def longitudinal_relaxation(input_path, output_path='./', mask_threshold=0.05):
+def longitudinal_relaxation(input_path, output_path='./', save=False, mask_threshold=0.05):
     """
     Reconstruct quantitative T1 maps from Inversion Recovery Spin-Echo data.
     
@@ -90,10 +90,10 @@ def longitudinal_relaxation(input_path, output_path='./', mask_threshold=0.05):
         longitudinal_relaxation_map = inference.ir_se_t1_fitting(img, ti, mask)
         pbar.update(step)
         
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')
         pbar.update(step)
@@ -104,7 +104,7 @@ def longitudinal_relaxation(input_path, output_path='./', mask_threshold=0.05):
     return longitudinal_relaxation_map, img
 
     
-def transverse_relaxation(input_path, output_path='./', skip_first_echo=False, mask_threshold=0.05):
+def transverse_relaxation(input_path, output_path='./', save=False, skip_first_echo=False, mask_threshold=0.05):
     """
     Reconstruct quantitative T2 / T2* maps from Multi-Echo Spin-Echo / Gradient Echo data.
     
@@ -163,10 +163,10 @@ def transverse_relaxation(input_path, output_path='./', skip_first_echo=False, m
         transverse_relaxation_map = inference.me_transverse_relaxation_fitting(img, te, skip_first_echo, mask)
         pbar.update(step)
         
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(transverse_relaxation_map, info, output_label + '_qt2', output_path + '_qt2')         
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(transverse_relaxation_map, info, output_label + '_qt2', output_path + '_qt2')
         pbar.update(step)
@@ -177,7 +177,7 @@ def transverse_relaxation(input_path, output_path='./', skip_first_echo=False, m
     return transverse_relaxation_map, img
     
 
-def transmit_field(input_path, output_path='./', mask_threshold=0.05):
+def transmit_field(input_path, output_path='./', save=False, mask_threshold=0.05):
     """
     Reconstruct quantitative B1+ maps from Double Angle Spin-Echo / Gradient Echo data.
     
@@ -236,10 +236,10 @@ def transmit_field(input_path, output_path='./', mask_threshold=0.05):
         transmit_field_map = inference.b1_dam_fitting(img, fa, mask)
         pbar.update(step)
         
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(transmit_field_map, info, output_label + '_qb1', output_path + '_qb1')          
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(transmit_field_map, info, output_label + '_qb1', output_path + '_qb1')
         pbar.update(step)
@@ -250,7 +250,7 @@ def transmit_field(input_path, output_path='./', mask_threshold=0.05):
     return transmit_field_map
 
 
-def static_field(input_path, output_path='./', mask_threshold=0.05, fix_phase_along_z=False):
+def static_field(input_path, output_path='./', save=False, mask_threshold=0.05, fix_phase_along_z=False):
     """
     Reconstruct quantitative B0 maps from double echo Gradient Echo data.
     
@@ -308,10 +308,10 @@ def static_field(input_path, output_path='./', mask_threshold=0.05, fix_phase_al
         static_field_map, _ = inference.b0_multiecho_fitting(img, te, mask, fft_shift_along_z=fix_phase_along_z)
         pbar.update(step)
         
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(static_field_map, info, output_label + '_qb0', output_path + '_qb0')          
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(static_field_map, info, output_label + '_qb0', output_path + '_qb0')
         pbar.update(step)
@@ -322,7 +322,7 @@ def static_field(input_path, output_path='./', mask_threshold=0.05, fix_phase_al
     return static_field_map
     
 
-def phase_based_laplacian_ept(input_path, output_path='./',
+def phase_based_laplacian_ept(input_path, output_path='./', save=False,
                               segmentation_path=None, n_tissue_classes=3, merge_wm_csf=False, mask_threshold=0.05,
                               gaussian_preprocessing_sigma=0.0, gaussian_weight_sigma=0.45, 
                               laplacian_kernel_width=16, laplacian_kernel_shape='ellipsoid',
@@ -431,10 +431,10 @@ def phase_based_laplacian_ept(input_path, output_path='./',
                                                                               median_filter_width, mask, te, fix_phase_along_z)                            
         pbar.update(step)
         
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(conductivity_map, info, output_label + '_sigma', output_path + '_sigma')        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000*conductivity_map, info, output_label, output_path)
             
@@ -446,7 +446,7 @@ def phase_based_laplacian_ept(input_path, output_path='./',
     return conductivity_map
 
 
-def water_based_ept(input_path, output_path='./', anatomic_region='brain', units='ms', t1_index=0):
+def water_based_ept(input_path, output_path='./', save=False, anatomic_region='brain', units='ms', t1_index=0):
     """ 
     Reconstruct electric properties maps from quantitative T1 map.
     
@@ -529,12 +529,12 @@ def water_based_ept(input_path, output_path='./', anatomic_region='brain', units
         conductivity, permittivity = inference.water_ept_fitting(img, B0, anatomic_region)
         pbar.update(step)
        
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(1000 * conductivity, info, output_label + '_sigma', output_path + '_sigma')
             io.write_dicom(permittivity, info, output_label + '_epsilon', output_path + '_epsilon')        
 
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * conductivity, info, output_label + '_sigma', output_path + '_sigma')
             io.write_nifti(permittivity, info, output_label + '_epsilon', output_path + '_epsilon')   
@@ -547,7 +547,7 @@ def water_based_ept(input_path, output_path='./', anatomic_region='brain', units
     return conductivity, permittivity
     
     
-def mp2rage_longitudinal_relaxation(input_path, output_path='./', inversion_times=None, tr_flash=None, flip_angles=None, inversion_efficiency=1.0, beta=0):
+def mp2rage_longitudinal_relaxation(input_path, output_path='./', save=False, inversion_times=None, tr_flash=None, flip_angles=None, inversion_efficiency=1.0, beta=0):
     """
     Reconstruct quantitative T1 maps from MP2RAGEDATA data.
     """
@@ -606,10 +606,10 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./', inversion_time
             io.write_nifti(uni_img, info, rootdir + '_uni', output_path + '_uni')
         
         # export t1map
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')
         pbar.update(step)
@@ -620,7 +620,7 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./', inversion_time
     return longitudinal_relaxation_map, uni_img
 
 
-def flaws_longitudinal_relaxation(input_path, output_path='./', inversion_times=None, flip_angles=None, tr_flash=None, inversion_efficiency=1.0, beta=0):
+def flaws_longitudinal_relaxation(input_path, output_path='./', save=False, inversion_times=None, flip_angles=None, tr_flash=None, inversion_efficiency=1.0, beta=0):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
@@ -672,58 +672,58 @@ def flaws_longitudinal_relaxation(input_path, output_path='./', inversion_times=
         pbar.update(step)
         
         # export wm suppressed image
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(np.abs(img[0]), info, 'FLAWS White Matter Suppressed', output_path + '_wms', series_number_offset=100)        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(np.abs(img[0]), info, rootdir + '_wms', output_path + '_wms')
             
         # export csf suppressed image
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(np.abs(img[1]), info, 'FLAWS CSF Suppressed', output_path + '_csfs', series_number_offset=200)        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(np.abs(img[1]), info, rootdir + '_csfs', output_path + '_csfs')
         
         # export unified image
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(1000 * uni_img, info, 'FLAWS Unified T1w', output_path + '_uni', series_number_offset=500)        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * uni_img, info, rootdir + '_uni', output_path + '_uni')
             
         # export minimum image
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(1000 * min_img, info, 'FLAWS Minimum Image', output_path + '_min', series_number_offset=600)        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * min_img, info, rootdir + '_min', output_path + '_min')
             
         # export hc image
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(1000 * hc_img, info, 'FLAWS High-Contrast Image', output_path + '_hc', series_number_offset=300)        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * hc_img, info, rootdir + '_hc', output_path + '_hc')
             
         # export hco image
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(1000 * hco_img, info, 'FLAWS T1w-MP2RAGE-like image', output_path + '_hco', series_number_offset=400)        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(1000 * hco_img, info, rootdir + '_hco', output_path + '_hco')
         
         # export t1map
-        if save_dicom:
+        if save and save_dicom:
             pbar.set_description("saving output dicom to disk...")
             io.write_dicom(longitudinal_relaxation_map, info, 'FLAWS T1 map [ms]', output_path + '_qt1', series_number_offset=10)        
-        if save_nifti:
+        if save and save_nifti:
             pbar.set_description("saving output nifti to disk...")
             io.write_nifti(longitudinal_relaxation_map, info, output_label + '_qt1', output_path + '_qt1')
         pbar.update(step)

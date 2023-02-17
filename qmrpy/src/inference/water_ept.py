@@ -53,7 +53,9 @@ water_lut = {'1.5': {'A': 0.935, 'B': 0.341},
              '7.0': {'A': 0.93, 'B': 0.62}}
 
 # Tabulated water contents [%] (source: https://www.sciencedirect.com/science/article/pii/S1053811922001434)
-literature_water = {'wm': 69.0, 'gm': 80.0, 'csf': 100.0}
+literature_water = {'wm': 69.0, 'gm': 80.0, 'csf': 100.0} # our submission
+# literature_water = {'wm': 70.0, 'gm': 81.0, 'csf': 100.0} # average from https://doi.org/10.1016/j.neuroimage.2022.119014 (table 2)
+# literature_water = {'wm': 69.57, 'gm': 83.41, 'csf': 98.8} # Michel et al.
 
 # 4 Cole-Cole model parameters (N De Geeter et al 2012 Phys. Med. Biol. 57 2169)
 brain_params = {'wm': {'epsInf': 4.0,
