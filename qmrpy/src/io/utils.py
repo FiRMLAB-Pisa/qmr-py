@@ -115,7 +115,7 @@ def _cast_to_complex(dsets_in):
     """
     # get vendor
     vendor = _get_vendor(dsets_in[0])
-    
+
     # actual conversion
     if vendor == 'GE':
         return _cast_to_complex_ge(dsets_in)
@@ -131,13 +131,13 @@ def _get_vendor(dset):
     """
     Get vendor from DICOM header.
     """
-    if dset.Manufacturer == 'GE MEDICAL SYSTEMS':
+    if 'GE' in dset.Manufacturer.upper():
         return 'GE'
     
-    if dset.Manufacturer == 'Philips Medical Systems':
+    if 'PHILIPS' in dset.Manufacturer.upper():
         return 'Philips'
     
-    if dset.Manufacturer == 'SIEMENS':
+    if 'SIEMENS' in dset.Manufacturer.upper():
         return 'Siemens'
     
 
