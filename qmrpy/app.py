@@ -34,7 +34,7 @@ def longitudinal_relaxation(input_path, output_path, mask_threshold):
     
     where TI is the Inversion Time.
     """
-    alg.longitudinal_relaxation(input_path, output_path, mask_threshold)
+    alg.longitudinal_relaxation(input_path, output_path, True, mask_threshold)
 
     
 # wrap into command line
@@ -56,7 +56,7 @@ def transverse_relaxation(input_path, output_path, skip_first_echo, mask_thresho
     
     where T2 is replaced by T2* for Gradient Echo data and TE is the Echo Time.
     """
-    alg.transverse_relaxation(input_path, output_path, skip_first_echo, mask_threshold)
+    alg.transverse_relaxation(input_path, output_path, True, skip_first_echo, mask_threshold)
 
     
 # wrap into command line
@@ -77,7 +77,7 @@ def transmit_field(input_path, output_path, mask_threshold):
     
     where theta is the nominal Flip Angle.
     """
-    alg.transmit_field(input_path, output_path, mask_threshold)
+    alg.transmit_field(input_path, output_path, True, mask_threshold)
     
 
 # wrap into command line
@@ -98,7 +98,7 @@ def static_field(input_path, output_path, mask_threshold, fix_phase_along_z):
         s(t) = M0 * exp(1i * gamma * B0)
         
     """
-    alg.static_field(input_path, output_path, mask_threshold, fix_phase_along_z)
+    alg.static_field(input_path, output_path, True, mask_threshold, fix_phase_along_z)
     
 
 # wrap into command line
@@ -134,7 +134,7 @@ def phase_based_laplacian_ept(input_path, output_path, segmentation_path, n_tiss
     
     where Phi is bSSFP phase, omega0 is the Larmor frequency and mu0 is the vacuum permittivity.
     """
-    alg.phase_based_laplacian_ept(input_path, output_path, segmentation_path, n_tissue_classes, merge_wm_csf, mask_threshold, 
+    alg.phase_based_laplacian_ept(input_path, output_path, True, segmentation_path, n_tissue_classes, merge_wm_csf, mask_threshold, 
                                   gaussian_preprocessing_sigma, gaussian_weight_sigma, 
                                   laplacian_kernel_width, laplacian_kernel_shape, 
                                   median_filter_width, fix_phase_along_z)
@@ -168,7 +168,7 @@ def water_based_ept(input_path, output_path, anatomic_region, units, t1_index):
     where sigma is the conductivityty, W the percentage
     water concentration and c_i the model coefficients.
     """
-    alg.water_based_ept(input_path, output_path, anatomic_region, units, t1_index)
+    alg.water_based_ept(input_path, output_path, True, anatomic_region, units, t1_index)
     
     
 # wrap into command line
@@ -187,7 +187,7 @@ def mp2rage_longitudinal_relaxation(input_path, output_path, inversion_times, tr
     """
     Reconstruct quantitative T1 maps from MP2RAGEDATA data.
     """
-    alg.mp2rage_longitudinal_relaxation(input_path, output_path, inversion_times, tr_flash, flip_angles, inversion_efficiency, beta)
+    alg.mp2rage_longitudinal_relaxation(input_path, output_path, True, inversion_times, tr_flash, flip_angles, inversion_efficiency, beta)
 
     
 # wrap into command line
@@ -206,7 +206,7 @@ def flaws_longitudinal_relaxation(input_path, output_path, inversion_times, flip
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
-    alg.flaws_longitudinal_relaxation(input_path, output_path, inversion_times, flip_angles, tr_flash, inversion_efficiency, beta)
+    alg.flaws_longitudinal_relaxation(input_path, output_path, True, inversion_times, flip_angles, tr_flash, inversion_efficiency, beta)
 
     
 # wrap into command line

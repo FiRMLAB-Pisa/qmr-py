@@ -142,16 +142,24 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             img_imag = np.array([])
             
         # magnitude
-        tmp = np.concatenate((files_phase, files_real, files_imag)).tolist()
-        s = set(tmp)
-        files_mag = np.array([file for file in nifti_files if file not in s])
-        if isinstance(files_mag, str):
-            files_mag = np.array([files_mag])
-        img_mag = [nib.load(file) for file in files_mag]
-        data = np.stack([d.get_fdata() for d in img_mag], axis=-1).squeeze()
-        affine = img_mag[0].affine
-        header = img_mag[0].header
+        try: 
+            idx = np.argwhere(np.array(['mag' in name for name in nifti_files])).squeeze()
+            files_mag = nifti_files[idx]
+            if isinstance(files_mag, str):
+                files_mag = np.array([files_mag])
+                
+            # remove imag
+            tmp = np.concatenate((files_phase, files_real, files_imag)).tolist()
+            s = set(tmp)
+            files_mag = np.array([file for file in nifti_files if file not in s])
             
+            img_mag = [nib.load(file) for file in files_mag]
+            data = np.stack([d.get_fdata() for d in img_mag], axis=-1).squeeze()
+            affine = img_mag[0].affine
+            header = img_mag[0].header
+        except:
+            img_mag = np.array([])
+                      
         # assemble image
         if files_mag.shape[0] != 0 and files_phase.shape[0] != 0:
             scale = 2 * np.pi / 4095
@@ -160,8 +168,7 @@ def read_nifti(nifti_files: Union[str, List, Tuple]) -> Tuple[np.ndarray, Dict]:
             
         if files_real.shape[0] != 0 and files_imag.shape[0] != 0:
             data = data_real + 1j * data_imag
-            
-                    
+                            
     else:
         file_path = [os.path.normpath(os.path.abspath(nifti_files))]
         img = nib.load(file_path[0])
