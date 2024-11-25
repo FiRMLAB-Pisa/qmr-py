@@ -183,11 +183,12 @@ cli.add_command(water_based_ept)
 @click.option( '--flip-angles', '-fa', multiple=True, required=True, help='FLASH readouts flip angle(s) [deg]')
 @click.option( '--inversion-efficiency', default=1.0, show_default=True, help='Inversion efficiency for imperfect pulse')
 @click.option( '--beta', default=0, show_default=True, help='Regularization parameter for background denoising')
-def mp2rage_longitudinal_relaxation(input_path, output_path, inversion_times, tr_flash, flip_angles, inversion_efficiency, beta):
+@click.option( '--Rz', default=1, show_default=True, help='Slice encoding acceleration factor')
+def mp2rage_longitudinal_relaxation(input_path, output_path, inversion_times, tr_flash, flip_angles, inversion_efficiency, beta, Rz):
     """
     Reconstruct quantitative T1 maps from MP2RAGEDATA data.
     """
-    alg.mp2rage_longitudinal_relaxation(input_path, output_path, True, inversion_times, tr_flash, flip_angles, inversion_efficiency, beta)
+    alg.mp2rage_longitudinal_relaxation(input_path, output_path, True, inversion_times, tr_flash, flip_angles, inversion_efficiency, beta, Rz)
 
     
 # wrap into command line
@@ -202,7 +203,8 @@ cli.add_command(mp2rage_longitudinal_relaxation)
 @click.option( '--tr-flash', '-tr', required=True, help='FLASH readouts repetition time(s) [ms]')
 @click.option( '--inversion-efficiency', default=1.0, show_default=True, help='Inversion efficiency for imperfect pulse')
 @click.option( '--beta', default=0, show_default=True, help='Regularization parameter for background denoising')
-def flaws_longitudinal_relaxation(input_path, output_path, inversion_times, flip_angles, tr_flash, inversion_efficiency, beta):
+@click.option( '--Rz', default=1, show_default=True, help='Slice encoding acceleration factor')
+def flaws_longitudinal_relaxation(input_path, output_path, inversion_times, flip_angles, tr_flash, inversion_efficiency, beta, Rz):
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
