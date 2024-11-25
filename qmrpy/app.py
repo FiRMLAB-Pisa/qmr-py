@@ -208,7 +208,7 @@ def flaws_longitudinal_relaxation(input_path, output_path, inversion_times, flip
     """
     Reconstruct quantitative T1 maps from FLAWS data.
     """
-    alg.flaws_longitudinal_relaxation(input_path, output_path, True, inversion_times, flip_angles, tr_flash, inversion_efficiency, beta)
+    alg.flaws_longitudinal_relaxation(input_path, output_path, True, inversion_times, flip_angles, tr_flash, inversion_efficiency, beta, Rz)
 
     
 # wrap into command line
