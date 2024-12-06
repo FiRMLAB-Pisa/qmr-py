@@ -225,7 +225,6 @@ class MP2RAGE:
             nZ_bef = nslices[0]
             nZ_aft = nslices[1]
             nslices = sum(nslices);
-    
         elif len(nslices)==1:
             nZ_bef = nslices / 2
             nZ_aft = nslices / 2
@@ -252,7 +251,7 @@ class MP2RAGE:
         MZsteadystatenumerator = MZsteadystatenumerator * cosalfaE1[0]**nslices + (1 - E_1) * (1 - cosalfaE1[0]**nslices) / (1 - cosalfaE1[0])      
         MZsteadystatenumerator = MZsteadystatenumerator * E_TD[1] + (1 - E_TD[1])
         
-        MZsteadystatenumerator = MZsteadystatenumerator * cosalfaE1[1]**nslices + (1 - E_1) * (1 - cosalfaE1[1])**nslices / (1 - cosalfaE1[1])        
+        MZsteadystatenumerator = MZsteadystatenumerator * cosalfaE1[1]**nslices + (1 - E_1) * (1 - cosalfaE1[1]**nslices) / (1 - cosalfaE1[1])        
         MZsteadystatenumerator = MZsteadystatenumerator * E_TD[2] + (1 - E_TD[2])
     
         MZsteadystate *= MZsteadystatenumerator
