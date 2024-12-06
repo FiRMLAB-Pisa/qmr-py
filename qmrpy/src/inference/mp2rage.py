@@ -15,7 +15,7 @@ import numpy as np
 __all__ = ['mp2rage_t1_fitting']
 
 
-def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversion_efficiency=1.0, rz=1, sequence='mp2rage'):
+def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, beta=0, inversion_efficiency=1.0, rz=1, sequence='mp2rage'):
     """
     Calculate t2/t2* maps from multiecho spin echo / gradient echo data.
     
@@ -48,7 +48,7 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversio
         
     # get additional images
     if sequence == 'mp2rage':
-        t1map = MP2RAGE.fit_t1(uni_img, ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy='uni')
+        t1map = MP2RAGE.fit_t1(uni_img, ti, fa, tr_flash, tr_mp2rage, nslices, inversion_efficiency, strategy='uni')
         return t1map, uni_img
     
     elif sequence == 'flaws':
@@ -57,7 +57,7 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversio
         _, hco_img = MP2RAGE().hco_image(input[0], input[1], uni_img)
         
         # actual t1 fit
-        t1map = MP2RAGE.fit_t1(hc_img, ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy='hc')
+        t1map = MP2RAGE.fit_t1(hc_img, ti, fa, tr_flash, tr_mp2rage, nslices, inversion_efficiency, strategy='hc')
             
         return t1map, uni_img, min_img, hc_img, hco_img
 
@@ -182,12 +182,12 @@ class MP2RAGE:
         return hco_image, None
     
     @staticmethod
-    def fit_t1(image, ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency=0.96, strategy='uni'):
+    def fit_t1(image, ti, fa, tr_flash, tr_mp2rage, nslices, inversion_efficiency=0.96, strategy='uni'):
 
         # get lookup table
-        intensity, t1_grid = MP2RAGE.lookup_table(ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy)
+        intensity, t1_grid = MP2RAGE.lookup_table(ti, fa, tr_flash, tr_mp2rage, nslices, inversion_efficiency, strategy)
         
-        # sorting
+        # sorting  
         order = np.argsort(intensity)
         t1_grid = t1_grid[order]
         intensity = intensity[order]
@@ -204,7 +204,7 @@ class MP2RAGE:
         return t1map
     
     @staticmethod
-    def signal_model(ti, fa, tr_flash, tr_mp2rage, nslices, T1s, B0, inversion_efficiency):
+    def signal_model(ti, fa, tr_flash, tr_mp2rage, nslices, T1s, inversion_efficiency):
     
         # handle input parameters
         ti = np.atleast_1d(ti) * 1e-3 # [ms] -> s
@@ -272,11 +272,11 @@ class MP2RAGE:
         return signal        
 
     @staticmethod
-    def lookup_table(ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy):
+    def lookup_table(ti, fa, tr_flash, tr_mp2rage, nslices, inversion_efficiency, strategy):
     
         # get parameters search grid
-        t1_grid = np.arange(0.05, 5.05, 0.05)
-        signal = MP2RAGE.signal_model(ti, fa, tr_flash, tr_mp2rage, nslices, t1_grid, B0, inversion_efficiency)
+        t1_grid = np.arange(0.05, 15.05, 0.05)
+        signal = MP2RAGE.signal_model(ti, fa, tr_flash, tr_mp2rage, nslices, t1_grid, inversion_efficiency)
             
         # get unified signal
         intensity = (signal[0] * signal[1].conj()).real / (np.abs(signal[0])**2 + np.abs(signal[1])**2)
@@ -286,11 +286,11 @@ class MP2RAGE:
             _, hc_signal = MP2RAGE.hc_image(signal[0], signal[1], uni_signal)
 
             # get monotonic part
-            minindex = np.argmax(np.abs(hc_signal))
-            maxindex = np.argmin(np.abs(hc_signal))
+            # minindex = np.argmax(np.abs(hc_signal))
+            # maxindex = np.argmin(np.abs(hc_signal))
                     
-            hc_signal = hc_signal[minindex:maxindex+1]
-            t1_grid = t1_grid[minindex:maxindex+1]
+            # hc_signal = hc_signal[minindex:maxindex+1]
+            # t1_grid = t1_grid[minindex:maxindex+1]
     
             return hc_signal, t1_grid
         

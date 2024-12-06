@@ -580,7 +580,6 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./', save=False, in
         fa = np.asarray(flip_angles, dtype=np.float64)
         tr = np.asarray(tr_flash, dtype=np.float64)
         tr_mp2rage = info['TR'][0]
-        B0 = info['B0']
         pbar.update(step)
         
         # detect dicom or nifti
@@ -595,7 +594,7 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./', save=False, in
             save_nifti = False
                     
         pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map, uni_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, tr_mp2rage, B0, beta, inversion_efficiency, rz)
+        longitudinal_relaxation_map, uni_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, tr_mp2rage, beta, inversion_efficiency, rz)
         pbar.update(step)
         
         # export unified image
@@ -654,7 +653,6 @@ def flaws_longitudinal_relaxation(input_path, output_path='./', save=False, inve
         fa = np.asarray(flip_angles, dtype=np.float64)
         tr_flash = np.asarray(tr_flash, dtype=np.float64)
         tr = info['TR'][0]
-        B0 = info['B0']
         pbar.update(step)
         
         # detect dicom or nifti
@@ -669,7 +667,7 @@ def flaws_longitudinal_relaxation(input_path, output_path='./', save=False, inve
             save_nifti = False
                     
         pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr_flash, tr, B0, beta, inversion_efficiency, rz, sequence='flaws')
+        longitudinal_relaxation_map, uni_img, min_img, hc_img, hco_img = inference.mp2rage_t1_fitting(img, ti, fa, tr_flash, tr, beta, inversion_efficiency, rz, sequence='flaws')
         pbar.update(step)
         
         # export wm suppressed image
