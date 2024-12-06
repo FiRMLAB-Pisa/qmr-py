@@ -38,8 +38,8 @@ def mp2rage_t1_fitting(input, ti, fa, tr_flash, tr_mp2rage, B0, beta=0, inversio
         hco (ndarray, optional): Reversed High-Contrast image from FLAWS (MP2RAGEuni-like).
     """    
     # preserve input
-    input = np.abs(input.copy())
-    nslices = input.shape[0]
+    input = input.copy()
+    nslices = input.shape[1]
     nslices = np.ceil(nslices / rz)
     nslices = int(nslices)
     
@@ -187,8 +187,10 @@ class MP2RAGE:
         # get lookup table
         intensity, t1_grid = MP2RAGE.lookup_table(ti, fa, tr_flash, tr_mp2rage, nslices, B0, inversion_efficiency, strategy)
         
-        t1_grid = t1_grid[np.argsort(t1_grid)]
-        intensity = np.sort(intensity)
+        # sorting
+        order = np.argsort(intensity)
+        t1_grid = t1_grid[order]
+        intensity = intensity[order]
 
         # perform inference
         t1map = np.interp(image.flatten(), intensity, t1_grid)
@@ -209,7 +211,6 @@ class MP2RAGE:
         tr_mp2rage *= 1e-3 # [ms] -> [s]
         tr_flash *= 1e-3 # [ms] -> [s]
 
-   
         # flip angle
         fa = np.atleast_1d(fa)    
         fa = np.deg2rad(fa)
@@ -244,26 +245,28 @@ class MP2RAGE:
         cosalfaE1 = np.cos(fa)[:, None] * E_1    
         sinalfa = np.sin(fa)[:, None]
     
-        MZsteadystate = 1. / (1 + inversion_efficiency * (np.prod(cosalfaE1, axis=0))**(nslices) * np.prod(E_TD, axis=0))
+        MZsteadystate = 1 / (1 + inversion_efficiency * np.prod(cosalfaE1, axis=0)**nslices * np.prod(E_TD, axis=0))
         
         MZsteadystatenumerator = (1 - E_TD[0])
-        MZsteadystatenumerator *= cosalfaE1[0]**nslices + (1 - E_1) * (1 - (cosalfaE1[0])**nslices) / (1 - cosalfaE1[0])        
+        
+        MZsteadystatenumerator = MZsteadystatenumerator * cosalfaE1[0]**nslices + (1 - E_1) * (1 - cosalfaE1[0]**nslices) / (1 - cosalfaE1[0])      
         MZsteadystatenumerator = MZsteadystatenumerator * E_TD[1] + (1 - E_TD[1])
-        MZsteadystatenumerator *= cosalfaE1[1]**nslices + (1 - E_1) * (1 - (cosalfaE1[1])**nslices) / (1 - cosalfaE1[1])        
+        
+        MZsteadystatenumerator = MZsteadystatenumerator * cosalfaE1[1]**nslices + (1 - E_1) * (1 - cosalfaE1[1])**nslices / (1 - cosalfaE1[1])        
         MZsteadystatenumerator = MZsteadystatenumerator * E_TD[2] + (1 - E_TD[2])
     
-        MZsteadystate = MZsteadystate * MZsteadystatenumerator
+        MZsteadystate *= MZsteadystatenumerator
         
         # get signal
         signal = np.zeros((2, len(T1s)), dtype=np.float32)
-    
+        
         # signal for first volume
-        temp = (-inversion_efficiency * MZsteadystate * E_TD[0] + (1-E_TD[0])) * (cosalfaE1[0])**(nZ_bef) + (1 - E_1) * (1 - (cosalfaE1[0])**(nZ_bef)) / (1 - (cosalfaE1[0]))
+        temp = (-inversion_efficiency * MZsteadystate * E_TD[0] + (1-E_TD[0])) * cosalfaE1[0]**nZ_bef + (1 - E_1) * (1 - cosalfaE1[0]**nZ_bef) / (1 - cosalfaE1[0])
         signal[0] = sinalfa[0] * temp
     
         # signal for second volume
-        temp *= (cosalfaE1[1])**(nZ_aft) + (1 - E_1[1]) * (1 - (cosalfaE1[1])**(nZ_aft))  / (1 - (cosalfaE1[1]))
-        temp = (temp * E_TD[1] + (1 - E_TD[1])) * (cosalfaE1[1])**(nZ_bef) + (1 - E_1) * (1 - (cosalfaE1[1])**(nZ_bef)) / (1 - (cosalfaE1[1]))
+        temp = temp * cosalfaE1[0]**nZ_aft + (1 - E_1) * (1 - cosalfaE1[0]**nZ_aft)  / (1 - cosalfaE1[0])
+        temp = (temp * E_TD[1] + (1 - E_TD[1])) * cosalfaE1[1]**nZ_bef + (1 - E_1) * (1 - cosalfaE1[1]**nZ_bef) / (1 - cosalfaE1[1])
         signal[1] = sinalfa[1] * temp
     
         return signal        
@@ -276,11 +279,12 @@ class MP2RAGE:
         signal = MP2RAGE.signal_model(ti, fa, tr_flash, tr_mp2rage, nslices, t1_grid, B0, inversion_efficiency)
             
         # get unified signal
-        intensity = (signal[0] * signal[1].conj()).real / (np.abs(signal[0]**2) + np.abs(signal[1]**2))
+        intensity = (signal[0] * signal[1].conj()).real / (np.abs(signal[0])**2 + np.abs(signal[1])**2)
         uni_signal = intensity
-        _, hc_signal = MP2RAGE.hc_image(signal[0], signal[1], uni_signal)
         
-        if strategy != 'hc':
+        if strategy == 'hc':
+            _, hc_signal = MP2RAGE.hc_image(signal[0], signal[1], uni_signal)
+
             # get monotonic part
             minindex = np.argmax(np.abs(hc_signal))
             maxindex = np.argmin(np.abs(hc_signal))
@@ -288,4 +292,6 @@ class MP2RAGE:
             hc_signal = hc_signal[minindex:maxindex+1]
             t1_grid = t1_grid[minindex:maxindex+1]
     
-        return hc_signal, t1_grid
+            return hc_signal, t1_grid
+        
+        return uni_signal, t1_grid

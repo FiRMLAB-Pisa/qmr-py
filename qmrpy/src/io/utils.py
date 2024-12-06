@@ -290,7 +290,7 @@ def _get_slice_locations(dsets):
     uSliceLocs, firstSliceIdx = np.unique(sliceLocs, return_index=True)
     
     # get indexes
-    sliceIdx = np.zeros(sliceLocs.shape, dtype=np.int)
+    sliceIdx = np.zeros(sliceLocs.shape, dtype=int)
     
     for n in range(len(uSliceLocs)):
         sliceIdx[sliceLocs == uSliceLocs[n]] = n
@@ -396,7 +396,7 @@ def _get_unique_contrasts(constrasts):
     uContrasts = np.unique(constrasts, axis=0)
     
     # get indexes
-    contrastIdx = np.zeros(constrasts.shape[0], dtype=np.int)
+    contrastIdx = np.zeros(constrasts.shape[0], dtype=int)
     
     for n in range(uContrasts.shape[0]):
         contrastIdx[(constrasts == uContrasts[n]).all(axis=-1)] = n

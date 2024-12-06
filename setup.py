@@ -9,16 +9,16 @@ here = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(here, "README.md")) as f:
     long_description = f.read()
 
-install_requires = ["click==8.0.3", 
-                    "matplotlib==3.5.1", 
-                    "nibabel==3.2.2", 
-                    "numba==0.53.1", 
-                    "numpy==1.21.1", 
-                    "pydicom==2.2.2", 
-                    "pytest==7.0.0", 
-                    "scipy==1.7.3", 
-                    "scikit-image==0.19.3",
-                    "tqdm==4.62.3"]
+install_requires = ["click", 
+                    "matplotlib", 
+                    "nibabel", 
+                    "numba", 
+                    "numpy<2",
+                    "pydicom", 
+                    "pytest", 
+                    "scipy", 
+                    "scikit-image",
+                    "tqdm"]
 
 setuptools.setup(
     name="qmrpy",

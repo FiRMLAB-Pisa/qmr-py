@@ -579,6 +579,7 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./', save=False, in
         ti = np.asarray(inversion_times, dtype=np.float64)
         fa = np.asarray(flip_angles, dtype=np.float64)
         tr = np.asarray(tr_flash, dtype=np.float64)
+        tr_mp2rage = info['TR'][0]
         B0 = info['B0']
         pbar.update(step)
         
@@ -594,16 +595,16 @@ def mp2rage_longitudinal_relaxation(input_path, output_path='./', save=False, in
             save_nifti = False
                     
         pbar.set_description("computing longitudinal relaxation map...")
-        longitudinal_relaxation_map, uni_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, B0, beta, inversion_efficiency, rz)
+        longitudinal_relaxation_map, uni_img = inference.mp2rage_t1_fitting(img, ti, fa, tr, tr_mp2rage, B0, beta, inversion_efficiency, rz)
         pbar.update(step)
         
         # export unified image
         if save_dicom:
             pbar.set_description("saving output dicom to disk...")
-            io.write_dicom(uni_img, info, rootdir + '_uni', output_path + '_uni')        
+            io.write_dicom(1000 * uni_img, info, rootdir + '_uni', output_path + '_uni')        
         if save_nifti:
             pbar.set_description("saving output nifti to disk...")
-            io.write_nifti(uni_img, info, rootdir + '_uni', output_path + '_uni')
+            io.write_nifti(1000 * uni_img, info, rootdir + '_uni', output_path + '_uni')
         
         # export t1map
         if save and save_dicom:
