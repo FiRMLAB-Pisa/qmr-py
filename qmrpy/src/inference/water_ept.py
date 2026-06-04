@@ -48,7 +48,7 @@ eps0 = 1.0 / mu0 / c0**2
 gamma = 64e6 / 1.5
 
 # T1 to water content converter ([1] for A,B @3T; [2] for A,B @1.5T, @7T: computed from literature T1 values in https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6590660/pdf/HBM-40-1786.pdf)
-water_lut = {'1.5': {'A': 0.935, 'B': 0.341},
+water_lut = {'1.5': {'A': 0.921, 'B': 0.341},
              '3.0': {'A': 0.89, 'B': 0.50},
              '7.0': {'A': 0.93, 'B': 0.62}}
 
