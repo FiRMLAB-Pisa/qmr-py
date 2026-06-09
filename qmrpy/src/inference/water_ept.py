@@ -122,16 +122,16 @@ def water_ept_fitting(input: np.ndarray, field_strength: float, anatomic_region:
     
     # calibrate permittivity curve
     _p = _calibrate_permittivity(field_strength, anatomic_region)
-            
+
     # get water map
     water_map = _convert_t1_map_to_water_map(input, field_strength)
     
     # get conductivity
-    conductivity = _calculate_conductivity(water_map, _c[0], _c[1], _c[2])
+    conductivity = _calculate_conductivity(water_map.copy(), _c[0], _c[1], _c[2])
     
     # get permittivity
-    permittivity = _calculate_permittivity(water_map, _p[0], _p[1], _p[2])
-    
+    permittivity = _calculate_permittivity(water_map.copy(), _p[0], _p[1], _p[2])
+
     return conductivity, permittivity
 
       
@@ -254,8 +254,8 @@ def _calibrate_permittivity(field_strength, anatomic_region):
     pout, _ = opt.curve_fit(_calculate_permittivity, water, permittivity, p0=[-287e-4, 591e-2, -220])
     
     # unpack
-    p1, p2, p3 = pout[0], pout[1], pout[2] 
-    
+    p1, p2, p3 = pout[0], pout[1], pout[2]
+
     return p1, p2, p3
 
 
@@ -289,7 +289,6 @@ def _get_complex_dielectric_properties(field_strength, anatomic_region):
     # get params
     try:
         params = cole_cole_model_params[anatomic_region]
-        
     except:
         print('Not implemented!')
    
