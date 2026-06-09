@@ -502,7 +502,7 @@ def water_based_ept(input_path, output_path='./', save=False, anatomic_region='b
     with tqdm(total=3) as pbar:
         pbar.set_description("loading input data...")
         img, info = io.read_data(input_path)
-        B0 = info.get('B0', 3.0)
+        B0 = info['B0']
         pbar.update(step)
         
         # detect dicom or nifti

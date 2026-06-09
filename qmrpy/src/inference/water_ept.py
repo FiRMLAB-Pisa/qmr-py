@@ -325,11 +325,13 @@ def _convert_t1_map_to_water_map(t1map, field_strength=1.5):
         water_map (ndarray): water content map of the tissues (percentage).
     """
     # get A, B as [1,2]
+    print(field_strength)
     try:
-        A = water_lut[str(field_strength)]['A']
-        B = water_lut[str(field_strength)]['B']
+        key = f"{field_strength:.1f}"
+        A = water_lut[key]['A']
+        B = water_lut[key]['B']
     except:
-        print(f'Field strength (={field_strength} T) not available!')
+        print(f'Field strength (={key} T) not available!')
 
     # calculate water map as [2]
     water_map_inv = A + B / (t1map / 1000.0) # ms -> s
